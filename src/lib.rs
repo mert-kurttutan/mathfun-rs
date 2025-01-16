@@ -2,7 +2,7 @@
 pub(crate) mod unary;
 use once_cell::sync::Lazy;
 
-pub static RUNTIME_HW_CONFIG: Lazy<CpuFeatures> = Lazy::new(|| detect_hw_config());
+pub(crate) static RUNTIME_HW_CONFIG: Lazy<CpuFeatures> = Lazy::new(|| detect_hw_config());
 
 pub use unary::{
     vs_cos, vs_exp, vs_ln, vs_sin, vs_sqrt, vs_tanh,
@@ -12,21 +12,21 @@ pub use unary::{
 
 #[cfg(target_arch = "x86_64")]
 #[derive(Copy, Clone)]
-pub struct CpuFeatures {
-    pub sse: bool,
-    pub sse2: bool,
-    pub sse3: bool,
-    pub ssse3: bool,
-    pub avx: bool,
-    pub avx2: bool,
-    pub avx512f: bool,
-    pub avx512f16: bool,
-    // pub avx512bf16: bool,
-    pub avx512bw: bool,
-    pub avx512_vnni: bool,
-    pub fma: bool,
-    pub fma4: bool,
-    pub f16c: bool,
+pub(crate) struct CpuFeatures {
+    pub(crate) sse: bool,
+    pub(crate) sse2: bool,
+    pub(crate) sse3: bool,
+    pub(crate) ssse3: bool,
+    pub(crate) avx: bool,
+    pub(crate) avx2: bool,
+    pub(crate) avx512f: bool,
+    pub(crate) avx512f16: bool,
+    // pub(crate) avx512bf16: bool,
+    pub(crate) avx512bw: bool,
+    pub(crate) avx512_vnni: bool,
+    pub(crate) fma: bool,
+    pub(crate) fma4: bool,
+    pub(crate) f16c: bool,
 }
 
 #[inline]
