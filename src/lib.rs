@@ -1,0 +1,100 @@
+
+pub(crate) mod unary;
+use once_cell::sync::Lazy;
+
+pub static RUNTIME_HW_CONFIG: Lazy<CpuFeatures> = Lazy::new(|| detect_hw_config());
+
+pub use unary::{
+    vs_cos, vs_exp, vs_ln, vs_sin, vs_sqrt, vs_tanh,
+    vd_cos, vd_exp, vd_ln, vd_sin, vd_sqrt, vd_tanh,
+};
+
+
+#[cfg(target_arch = "x86_64")]
+#[derive(Copy, Clone)]
+pub struct CpuFeatures {
+    pub sse: bool,
+    pub sse2: bool,
+    pub sse3: bool,
+    pub ssse3: bool,
+    pub avx: bool,
+    pub avx2: bool,
+    pub avx512f: bool,
+    pub avx512f16: bool,
+    // pub avx512bf16: bool,
+    pub avx512bw: bool,
+    pub avx512_vnni: bool,
+    pub fma: bool,
+    pub fma4: bool,
+    pub f16c: bool,
+}
+
+#[inline]
+fn detect_hw_config() -> CpuFeatures {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let cpuid = raw_cpuid::CpuId::new();
+        let feature_info = cpuid.get_feature_info().unwrap();
+        let extended_feature_info = cpuid.get_extended_feature_info().unwrap();
+        let sse = feature_info.has_sse();
+        let sse2 = feature_info.has_sse2();
+        let sse3 = feature_info.has_sse3();
+        let ssse3 = feature_info.has_ssse3();
+        let avx = feature_info.has_avx();
+        let fma = feature_info.has_fma();
+        let avx2 = extended_feature_info.has_avx2();
+        let avx512f16 = extended_feature_info.has_avx512_fp16();
+        // let avx512bf16 = extended_feature_info.has_avx512_bf16();
+        let avx512f = extended_feature_info.has_avx512f();
+        let avx512bw = extended_feature_info.has_avx512bw();
+        let avx512_vnni = extended_feature_info.has_avx512vnni();
+        let f16c = feature_info.has_f16c();
+        let extended_processor_info = cpuid.get_extended_processor_and_feature_identifiers().unwrap();
+        let fma4 = extended_processor_info.has_fma4();
+        let cpu_ft = CpuFeatures {
+            sse,
+            sse2,
+            sse3,
+            ssse3,
+            avx,
+            avx2,
+            avx512f,
+            avx512f16,
+            avx512bw,
+            avx512_vnni,
+            fma,
+            fma4,
+            f16c,
+        };
+        cpu_ft
+    }
+    #[cfg(target_arch = "x86")]
+    {
+        let cpuid = raw_cpuid::CpuId::new();
+        let feature_info = cpuid.get_feature_info().unwrap();
+        let sse = feature_info.has_sse();
+        let sse2 = feature_info.has_sse2();
+        let sse3 = feature_info.has_sse3();
+        let ssse3 = feature_info.has_ssse3();
+        let cpu_ft = CpuFeatures { sse, sse2, sse3, ssse3 };
+        return cpu_ft;
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        use std::arch::is_aarch64_feature_detected;
+        let neon = is_aarch64_feature_detected!("neon");
+        let sve = is_aarch64_feature_detected!("sve");
+        let fp16 = is_aarch64_feature_detected!("fp16");
+        let f32mm = is_aarch64_feature_detected!("f32mm");
+        let fcma = is_aarch64_feature_detected!("fcma");
+        let i8mm = is_aarch64_feature_detected!("i8mm");
+
+        return CpuFeatures { neon, sve, fp16, f32mm, fcma, i8mm };
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
+    {
+        return CpuFeatures { dummy: false };
+    }
+}
+
+
