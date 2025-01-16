@@ -41,11 +41,19 @@ pub static VS_TANH: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
 
 
 pub static VD_SQRT: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    vd_sqrt_fallback
+    if RUNTIME_HW_CONFIG.avx {
+        vd_sqrt_avx
+    } else {
+        vd_sqrt_fallback
+    }
 });
 
 pub static VS_SQRT: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
-    vs_sqrt_fallback
+    if RUNTIME_HW_CONFIG.avx {
+        vs_sqrt_avx
+    } else {
+        vs_sqrt_fallback
+    }
 });
 
 pub static VD_SIN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
@@ -404,6 +412,37 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
+#[target_feature(enable = "avx")]
+unsafe fn vs_sqrt_avx(n: i64, a: *const f32, b: *mut f32) {
+    const NR: i64 = 8;
+    let mut i = 0;
+    while i <= (n-NR) {
+        let x = _mm256_loadu_ps(a.offset(i as isize));
+        let y = _mm256_sqrt_ps(x);
+        _mm256_storeu_ps(b.offset(i as isize), y);
+        i += NR;
+    }
+    while i < n {
+        *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+        i += 1;
+    }
+}
+
+#[target_feature(enable = "avx")]
+unsafe fn vd_sqrt_avx(n: i64, a: *const f64, b: *mut f64) {
+    const NR: i64 = 4;
+    let mut i = 0;
+    while i <= (n-NR) {
+        let x = _mm256_loadu_pd(a.offset(i as isize));
+        let y = _mm256_sqrt_pd(x);
+        _mm256_storeu_pd(b.offset(i as isize), y);
+        i += NR;
+    }
+    while i < n {
+        *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+        i += 1;
+    }
+}
 
 
 #[target_feature(enable = "avx,avx2,fma")]
@@ -614,3 +653,189 @@ impl_unary!(vs_sin, VS_SIN, f32, f32);
 
 impl_unary!(vd_cos, VD_COS, f64, f64);
 impl_unary!(vs_cos, VS_COS, f32, f32);
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn full_range_f32_pair() -> (Vec<f32>, Vec<f32>) {
+        let v_len = 1 << 32;
+        // let v_len = 16;
+        println!("v_len log2: {}", (v_len as f64).log2());
+        let mut a = vec![0f32; v_len];
+        let b = vec![0f32; v_len];
+        // collect the max value and print
+        let mut max = 0.;
+        for i in 0..v_len {
+            a[i] = f32::from_bits(i as u32);
+            if a[i] > max {
+                max = a[i];
+            }
+        }
+        println!("max: {}", max);
+
+        (a, b)
+    }
+
+    fn check_nan_inf(y_result: f64, y: f64) -> bool {
+        // nan check
+        if y_result.is_nan() {
+            return y.is_nan();
+        }
+        // inf check
+        if y_result > f32::MAX as f64 {
+            return y == f64::INFINITY;
+        }
+        if y_result < f32::MIN as f64 {
+            return y == f64::NEG_INFINITY;
+        }
+        return false;
+    }
+    fn check_exp(x: f32, y: f32) {
+        // println!("x.exp(): {}", x.exp());
+        let x = x as f64;
+        let y = y as f64;
+
+        let y_result = x.exp();
+
+        let nan_inf = check_nan_inf(y_result, y);
+        let diff = (y_result - y).abs();
+        let rel_diff = diff / y.abs().max(1.0);
+        assert!(rel_diff <= 1e-6 || nan_inf, "{} != {}, x: {}, diff: {}", y_result, y, x, rel_diff);
+    }
+
+    fn check_tanh(x: f32, y: f32) {
+        let x = x as f64;
+        let y = y as f64;
+
+        let y_result = x.tanh();
+
+        let nan_inf = check_nan_inf(y_result, y);
+        let diff = (y_result - y).abs();
+        let rel_diff = (diff * 1e8).round() / 1e8;
+        assert!(rel_diff <= 1e-6 || nan_inf, "{} != {}, x: {}, diff: {}", y_result, y, x, diff);
+    }
+
+
+    fn check_sin(x: f32, y: f32) {
+        let x = x as f64;
+        let y = y as f64;
+
+        let y_result = x.sin();
+        let too_large = x.abs() > 2f64.powi(16);
+
+        let nan_inf = check_nan_inf(y_result, y);
+        let diff = (y_result - y).abs();
+        let rel_diff = diff;
+        assert!(rel_diff < 1e-6 || nan_inf || too_large, "{} != {}, x: {}, diff: {}", y_result, y, x, diff);
+        // let x_64 = x as f64;
+        // // let y = x.sin();
+        // // let y = y as f64;
+        // if x.is_nan() {
+        //     assert!(y.is_nan(), "{} != {}, x: {}, x_tanh: {}", x, y, x, x.sin());
+        // } else if x.is_infinite() {
+        //     assert!(y.is_nan());
+        // } else {
+        //     let x_exp = x_64.sin();
+        //     if x_exp > f32::MAX as f64 {
+        //         assert!(y.is_nan(), "{} != {}, x: {}", x_exp, y, x);
+        //     } else {
+        //         let diff = (x_exp - y as f64).abs();
+        //         let rel_diff = diff;
+        //         // round rel_diff to 1e-7 precision
+        //         let rel_diff_round = (rel_diff * 1e7).round() / 1e7;
+        //         // pass if x is bigger than 2**16
+        //         let pass = x_64.abs() > 2f64.powi(16);
+        //         assert!(rel_diff_round <= 1e-6 ||pass, "{} != {}, x: {}, diff: {}", x_64.sin(), y, x, rel_diff);
+        //     };
+
+        // }
+    }
+    fn check_cos(x: f32, y: f32) {
+        let x = x as f64;
+        let y = y as f64;
+        let too_large = x.abs() > 2f64.powi(16);
+        let y_result = x.cos();
+
+        let nan_inf = check_nan_inf(y_result, y);
+        let diff = (y_result - y).abs();
+        let rel_diff = diff;
+        assert!(rel_diff < 1e-6 || nan_inf || too_large, "{} != {}, x: {}, diff: {}", y_result, y, x, diff);
+    }
+
+    fn check_sqrt(x: f32, y: f32) {
+        let x = x as f64;
+        let y = y as f64;
+
+        let y_result = x.sqrt();
+
+        let is_x_neg = x < 0.0;
+
+        let nan_inf = check_nan_inf(y_result, y);
+        let diff = (y_result - y).abs();
+        let rel_diff = diff / (y.abs().max(1.0));
+        assert!(rel_diff < 1e-6 || is_x_neg || nan_inf, "{} != {}, x: {}, diff: {}", y_result, y, x, diff);
+    }
+
+    #[test]
+    fn accuracy_sqrt() {
+        let (a, mut b) = full_range_f32_pair();
+        let a_len = a.len();
+        unsafe {
+            vs_sqrt(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+        }
+        for i in 0..a_len {
+            check_sqrt(a[i], b[i]);
+        }
+    }
+
+    #[test]
+    fn accuracy_sin() {
+        let (a, mut b) = full_range_f32_pair();
+        let a_len = a.len();
+        unsafe {
+            vs_sin(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+        }
+        for i in 0..a_len {
+            check_sin(a[i], b[i]);
+        }
+    }
+
+    #[test]
+    fn accuracy_cos() {
+        let (a, mut b) = full_range_f32_pair();
+        let a_len = a.len();
+        unsafe {
+            vs_cos(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+        }
+        for i in 0..a_len {
+            check_cos(a[i], b[i]);
+        }
+    }
+
+    #[test]
+    fn accuracy_exp() {
+        let (a, mut b) = full_range_f32_pair();
+        let a_len = a.len();
+        unsafe {
+            vs_exp(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+        }
+        for i in 0..a_len {
+            check_exp(a[i], b[i]);
+        }
+    }
+
+    #[test]
+    fn accuracy_tanh() {
+        let (a, mut b) = full_range_f32_pair();
+        let a_len = a.len();
+        unsafe {
+            vs_tanh(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+        }
+        for i in 0..a_len {
+            check_tanh(a[i], b[i]);
+        }
+    }
+}
