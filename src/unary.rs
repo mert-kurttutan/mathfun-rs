@@ -7,78 +7,49 @@ use core::arch::x86_64::*;
 
 use crate::RUNTIME_HW_CONFIG;
 
-pub static VD_EXP: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    vd_exp_fallback
-});
+pub static VD_EXP: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_exp_fallback);
 
 pub static VS_EXP: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
-    if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma {
-        vs_exp_avx2_fma
-    } else {
-        vs_exp_fallback
+    if RUNTIME_HW_CONFIG.avx512f {
+        return vs_exp_avx512f_asm;
     }
+    if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma {
+        return vs_exp_avx2_fma;
+    }
+    vs_exp_fallback
 });
 
-pub static VD_LN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    vd_ln_fallback
-});
+pub static VD_LN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_ln_fallback);
 
-pub static VS_LN: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
-    vs_ln_fallback
-});
+pub static VS_LN: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| vs_ln_fallback);
 
-pub static VD_TANH: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    vd_tanh_fallback
-});
+pub static VD_TANH: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_tanh_fallback);
 
 pub static VS_TANH: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
+    if RUNTIME_HW_CONFIG.avx512f {
+        return vs_tanh_avx512f_asm;
+    }
     if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma {
-        vs_tanh_avx2_fma
-    } else {
-        vs_tanh_fallback
+        return vs_tanh_avx2_fma;
     }
+    vs_tanh_fallback
 });
 
+pub static VD_SQRT: Lazy<unsafe fn(i64, *const f64, *mut f64)> =
+    Lazy::new(|| if RUNTIME_HW_CONFIG.avx { vd_sqrt_avx } else { vd_sqrt_fallback });
 
-pub static VD_SQRT: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    if RUNTIME_HW_CONFIG.avx {
-        vd_sqrt_avx
-    } else {
-        vd_sqrt_fallback
-    }
-});
+pub static VS_SQRT: Lazy<unsafe fn(i64, *const f32, *mut f32)> =
+    Lazy::new(|| if RUNTIME_HW_CONFIG.avx { vs_sqrt_avx } else { vs_sqrt_fallback });
 
-pub static VS_SQRT: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
-    if RUNTIME_HW_CONFIG.avx {
-        vs_sqrt_avx
-    } else {
-        vs_sqrt_fallback
-    }
-});
+pub static VD_SIN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_sin_fallback);
 
-pub static VD_SIN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    vd_sin_fallback
-});
+pub static VS_SIN: Lazy<unsafe fn(i64, *const f32, *mut f32)> =
+    Lazy::new(|| if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma { vs_sin_avx2_fma } else { vs_sin_fallback });
 
-pub static VS_SIN: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
-    if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma {
-        vs_sin_avx2_fma
-    } else {
-        vs_sin_fallback
-    }
-});
+pub static VD_COS: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_cos_fallback);
 
-pub static VD_COS: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
-    vd_cos_fallback
-});
-
-pub static VS_COS: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
-    if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma {
-        vs_cos_avx2_fma
-    } else {
-        vs_cos_fallback
-    }
-});
+pub static VS_COS: Lazy<unsafe fn(i64, *const f32, *mut f32)> =
+    Lazy::new(|| if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma { vs_cos_avx2_fma } else { vs_cos_fallback });
 
 macro_rules! impl_unary {
     ($name:ident, $fn:ident, $ta:ty, $tb:ty) => {
@@ -101,7 +72,11 @@ macro_rules! impl_unary {
                     let a = a_usize as *const $ta;
                     let y = y_usize as *mut $tb;
                     let n_cur = num_per_thread.min(n - i * num_per_thread);
-                    fn_sequantial(n_cur, a.offset((i * num_per_thread) as isize), y.offset((i * num_per_thread) as isize));
+                    fn_sequantial(
+                        n_cur,
+                        a.offset((i * num_per_thread) as isize),
+                        y.offset((i * num_per_thread) as isize),
+                    );
                 }
             });
             fn_sequantial(n.min(num_per_thread), a, y);
@@ -110,15 +85,12 @@ macro_rules! impl_unary {
     };
 }
 
-
-
-
 #[target_feature(enable = "avx,avx2,fma")]
 unsafe fn vs_exp_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     const NR: i64 = 8;
     // Constants
-    const EXP_HI: f32 = 88.7228391117*1.0;
-    const EXP_LO: f32 = -88.7228391117*1.0;
+    const EXP_HI: f32 = 88.7228391117 * 1.0;
+    const EXP_LO: f32 = -88.7228391117 * 1.0;
     const LOG2EF: f32 = 1.44269504088896341;
     const INV_LOG2EF: f32 = 0.69314718056;
     const EXP_P0: f32 = 0.00032712723;
@@ -147,7 +119,7 @@ unsafe fn vs_exp_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let e_sqrt = _mm256_set1_ps(1.6487212707);
 
     let mut i = 0;
-    while i <= (n-NR) {
+    while i <= (n - NR) {
         let x = _mm256_loadu_ps(a.offset(i as isize));
 
         // Clamp x
@@ -192,13 +164,93 @@ unsafe fn vs_exp_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
+unsafe fn vs_exp_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
+    // Constants
+    // use asm until avx512f is stabilized
+    const EXP_HI: f32 = 88.3762626647949 * 2.0;
+    const EXP_LO: f32 = -88.3762626647949 * 2.0;
+    const LOG2EF: f32 = 1.44269504088896341;
+    const INV_LOG2EF: f32 = 0.693359375;
+    const CEHPES_EXP_C2: f32 = -2.12194440e-4;
+    const EXP_P0: f32 = 1.9875691500E-4;
+    const EXP_P1: f32 = 1.3981999507E-3;
+    const EXP_P2: f32 = 8.3334519073E-3;
+    const EXP_P3: f32 = 4.1665795894E-2;
+    const EXP_P4: f32 = 1.6666665459E-1;
+    const EXP_P5: f32 = 5.0000001201E-1;
+
+    let constant_arr =
+        [LOG2EF, -CEHPES_EXP_C2 - INV_LOG2EF, EXP_P0, EXP_P1, EXP_P2, EXP_P3, EXP_P4, EXP_P5, 1.0, EXP_HI, EXP_LO];
+    let mut i = 0;
+    core::arch::asm!(
+        "vbroadcastss ({constant_arrx}), %zmm0",
+        "vbroadcastss 4({constant_arrx}), %zmm1",
+        "vbroadcastss 8({constant_arrx}), %zmm2",
+        "vbroadcastss 12({constant_arrx}), %zmm3",
+        "vbroadcastss 16({constant_arrx}), %zmm4",
+        "vbroadcastss 20({constant_arrx}), %zmm5",
+        "vbroadcastss 24({constant_arrx}), %zmm6",
+        "vbroadcastss 28({constant_arrx}), %zmm7",
+        "vbroadcastss 32({constant_arrx}), %zmm8",
+
+        "vbroadcastss 36({constant_arrx}), %zmm13",
+        "vbroadcastss 40({constant_arrx}), %zmm14",
+
+        "test {nx:e}, {nx:e}",
+        "je 3f",
+
+        "2:",
+        "vmovups ({ax}), %zmm9",
+        // order of input for max and min is important
+        // since it leads to correct NaN propagation
+        "vminps %zmm9, %zmm13, %zmm9",
+        "vmaxps %zmm9, %zmm14, %zmm9",
+        "vmulps  %zmm0, %zmm9, %zmm10",
+        "vrndscaleps     $8, %zmm10, %zmm10",
+        "vfmadd231ps     %zmm1, %zmm10, %zmm9",
+        "vmovaps %zmm2, %zmm11",
+        "vfmadd213ps     %zmm3, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm4, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm5, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm6, %zmm9, %zmm11",
+        "vmulps  %zmm9, %zmm9, %zmm12",
+        "vfmadd213ps     %zmm7, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm9, %zmm12, %zmm11",
+        "vaddps  %zmm8, %zmm11, %zmm9",
+        "vscalefps       %zmm10, %zmm9, %zmm9",
+        "vmovups %zmm9, ({bx})",
+        "add  $64, {ax}",
+        "add  $64, {bx}",
+        "add $16, {ix:e}",
+        "cmp {nx:e}, {ix:e}",
+        "jl 2b",
+
+        "3:",
+        "vzeroupper",
+
+        constant_arrx = in(reg) &constant_arr,
+        ax = inout(reg) a => _,
+        bx = inout(reg) b => _,
+        ix = inout(reg) i => i,
+        nx = inout(reg) n / 16 * 16 => _,
+        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
+        out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
+        out("zmm30") _, out("zmm31") _,
+        options(att_syntax)
+    );
+    while i < n {
+        *b.offset(i as isize) = (*a.offset(i as isize)).exp();
+        i += 1;
+    }
+}
 
 #[target_feature(enable = "avx,avx2,fma")]
 unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     const NR: i64 = 8;
     // Constants
-    const EXP_HI: f32 = 88.7228391117*1.0;
-    const EXP_LO: f32 = -88.7228391117*1.0;
+    const EXP_HI: f32 = 88.7228391117 * 1.0;
+    const EXP_LO: f32 = -88.7228391117 * 1.0;
     const LOG2EF: f32 = 1.44269504088896341;
     const INV_LOG2EF: f32 = 0.69314718056;
     const EXP_P0: f32 = 0.00032712723;
@@ -230,13 +282,13 @@ unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let e_sqrt = _mm256_set1_ps(1.6487212707);
 
     let mut i = 0;
-    while i <= (n-NR) {
+    while i <= (n - NR) {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         let x0 = x;
-        let x0 = _mm256_max_ps(exp_hi,x0);
+        let x0 = _mm256_max_ps(exp_hi, x0);
         // Clamp x
-        let x = _mm256_min_ps(exp_hi,x);
-        let x = _mm256_max_ps(exp_lo,x);
+        let x = _mm256_min_ps(exp_hi, x);
+        let x = _mm256_max_ps(exp_lo, x);
 
         // Compute fx = floor(x * log2ef + 0.5)
         let mut fx = _mm256_mul_ps(x, log2ef);
@@ -272,10 +324,10 @@ unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
         let numerator = _mm256_sub_ps(r, one);
         let denominator = _mm256_add_ps(r, one);
         let mut r = _mm256_div_ps(numerator, denominator);
-        r = _mm256_min_ps(r,one);
-        r = _mm256_max_ps(r,one_neg);
+        r = _mm256_min_ps(r, one);
+        r = _mm256_max_ps(r, one_neg);
         // restore nan using min_ps
-        r = _mm256_min_ps(r,x0);
+        r = _mm256_min_ps(r, x0);
 
         _mm256_storeu_ps(b.offset(i as isize), r);
         i += NR;
@@ -286,9 +338,110 @@ unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
+unsafe fn vs_tanh_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
+    // Constants
+    // use asm until avx512f is stabilized
+    const EXP_HI: f32 = 88.3762626647949 * 1.0;
+    const EXP_LO: f32 = -88.3762626647949 * 1.0;
+    const LOG2EF: f32 = 1.44269504088896341;
+    const INV_LOG2EF: f32 = 0.693359375;
+    const CEHPES_EXP_C2: f32 = -2.12194440e-4;
+    const EXP_P0: f32 = 1.9875691500E-4;
+    const EXP_P1: f32 = 1.3981999507E-3;
+    const EXP_P2: f32 = 8.3334519073E-3;
+    const EXP_P3: f32 = 4.1665795894E-2;
+    const EXP_P4: f32 = 1.6666665459E-1;
+    const EXP_P5: f32 = 5.0000001201E-1;
 
+    let constant_arr = [
+        LOG2EF,
+        -CEHPES_EXP_C2 - INV_LOG2EF,
+        EXP_P0,
+        EXP_P1,
+        EXP_P2,
+        EXP_P3,
+        EXP_P4,
+        EXP_P5,
+        1.0,
+        EXP_HI,
+        EXP_LO,
+        -1.0,
+    ];
+    let mut i = 0;
+    core::arch::asm!(
+        "vbroadcastss ({constant_arrx}), %zmm0",
+        "vbroadcastss 4({constant_arrx}), %zmm1",
+        "vbroadcastss 8({constant_arrx}), %zmm2",
+        "vbroadcastss 12({constant_arrx}), %zmm3",
+        "vbroadcastss 16({constant_arrx}), %zmm4",
+        "vbroadcastss 20({constant_arrx}), %zmm5",
+        "vbroadcastss 24({constant_arrx}), %zmm6",
+        "vbroadcastss 28({constant_arrx}), %zmm7",
+        "vbroadcastss 32({constant_arrx}), %zmm8",
 
+        "vbroadcastss 36({constant_arrx}), %zmm13",
+        "vbroadcastss 40({constant_arrx}), %zmm14",
+        "vbroadcastss 44({constant_arrx}), %zmm15",
 
+        "test {nx:e}, {nx:e}",
+        "je 3f",
+
+        "2:",
+        "vmovups ({ax}), %zmm31",
+        // order of input for max and min is important
+        // since it leads to correct NaN propagation
+        "vminps %zmm31, %zmm13, %zmm9",
+        "vmaxps %zmm9, %zmm14, %zmm9",
+        "vmulps  %zmm0, %zmm9, %zmm10",
+        "vrndscaleps     $8, %zmm10, %zmm10",
+        "vfmadd231ps     %zmm1, %zmm10, %zmm9",
+        "vmovaps %zmm2, %zmm11",
+        "vfmadd213ps     %zmm3, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm4, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm5, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm6, %zmm9, %zmm11",
+        "vmulps  %zmm9, %zmm9, %zmm12",
+        "vfmadd213ps     %zmm7, %zmm9, %zmm11",
+        "vfmadd213ps     %zmm9, %zmm12, %zmm11",
+        "vaddps  %zmm8, %zmm11, %zmm9",
+        "vscalefps       %zmm10, %zmm9, %zmm9",
+        "vmulps %zmm9, %zmm9, %zmm9",
+
+        "vmaxps %zmm31, %zmm13, %zmm31",
+
+        "vaddps %zmm9, %zmm15, %zmm16",
+        "vaddps %zmm9, %zmm8, %zmm9",
+        "vdivps %zmm9, %zmm16, %zmm9",
+        "vminps %zmm8, %zmm9, %zmm9",
+        "vmaxps %zmm15, %zmm9, %zmm9",
+
+        "vminps %zmm31, %zmm9, %zmm9",
+        "vmovups %zmm9, ({bx})",
+        "add  $64, {ax}",
+        "add  $64, {bx}",
+        "add $16, {ix:e}",
+        "cmp {nx:e}, {ix:e}",
+        "jl 2b",
+
+        "3:",
+        "vzeroupper",
+
+        constant_arrx = in(reg) &constant_arr,
+        ax = inout(reg) a => _,
+        bx = inout(reg) b => _,
+        ix = inout(reg) i => i,
+        nx = inout(reg) n / 16 * 16 => _,
+        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
+        out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
+        out("zmm30") _, out("zmm31") _,
+        options(att_syntax)
+    );
+    while i < n {
+        *b.offset(i as isize) = (*a.offset(i as isize)).tanh();
+        i += 1;
+    }
+}
 
 #[target_feature(enable = "avx,avx2,fma")]
 unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
@@ -316,7 +469,6 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
 
     let fopi = _mm256_set1_ps(FOPI);
 
-
     let p0 = _mm256_set1_ps(P0);
     let p1 = _mm256_set1_ps(P1);
     let p2 = _mm256_set1_ps(P2);
@@ -336,7 +488,7 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let inv_sign_mask = _mm256_castsi256_ps(inv_sign_mask);
 
     let mut i = 0;
-    while i <= (n-NR) {
+    while i <= (n - NR) {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         let mut sign_bit = x;
         // take the absolute value
@@ -364,8 +516,6 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
         let imm2 = _mm256_and_si256(imm2, _mm256_set1_epi32(2));
         let imm2 = _mm256_cmpeq_epi32(imm2, _mm256_set1_epi32(0));
 
-
-
         let swap_sign_bit = _mm256_castsi256_ps(imm0);
         let poly_mask = _mm256_castsi256_ps(imm2);
         let sign_bit = _mm256_xor_ps(sign_bit, swap_sign_bit);
@@ -378,7 +528,6 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
         let x = _mm256_add_ps(x, xmm1);
         let x = _mm256_add_ps(x, xmm2);
         let x = _mm256_add_ps(x, xmm3);
-
 
         // Evaluate the first polynom  (0 <= x <= Pi/4)
         let mut y = q4;
@@ -416,7 +565,7 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
 unsafe fn vs_sqrt_avx(n: i64, a: *const f32, b: *mut f32) {
     const NR: i64 = 8;
     let mut i = 0;
-    while i <= (n-NR) {
+    while i <= (n - NR) {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         let y = _mm256_sqrt_ps(x);
         _mm256_storeu_ps(b.offset(i as isize), y);
@@ -432,7 +581,7 @@ unsafe fn vs_sqrt_avx(n: i64, a: *const f32, b: *mut f32) {
 unsafe fn vd_sqrt_avx(n: i64, a: *const f64, b: *mut f64) {
     const NR: i64 = 4;
     let mut i = 0;
-    while i <= (n-NR) {
+    while i <= (n - NR) {
         let x = _mm256_loadu_pd(a.offset(i as isize));
         let y = _mm256_sqrt_pd(x);
         _mm256_storeu_pd(b.offset(i as isize), y);
@@ -443,7 +592,6 @@ unsafe fn vd_sqrt_avx(n: i64, a: *const f64, b: *mut f64) {
         i += 1;
     }
 }
-
 
 #[target_feature(enable = "avx,avx2,fma")]
 unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
@@ -471,7 +619,6 @@ unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
 
     let fopi = _mm256_set1_ps(FOPI);
 
-
     let p0 = _mm256_set1_ps(P0);
     let p1 = _mm256_set1_ps(P1);
     let p2 = _mm256_set1_ps(P2);
@@ -489,7 +636,7 @@ unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let inv_sign_mask = _mm256_castsi256_ps(inv_sign_mask);
 
     let mut i = 0;
-    while i <= (n-NR) {
+    while i <= (n - NR) {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         // take the absolute value
         let x = _mm256_and_ps(x, inv_sign_mask);
@@ -528,7 +675,6 @@ unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
         let x = _mm256_add_ps(x, xmm2);
         let x = _mm256_add_ps(x, xmm3);
 
-
         // Evaluate the first polynom  (0 <= x <= Pi/4)
         let mut y = q4;
         let z = _mm256_mul_ps(x, x);
@@ -560,9 +706,6 @@ unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
         i += 1;
     }
 }
-
-
-
 
 pub(crate) unsafe fn vd_exp_fallback(n: i64, a: *const f64, y: *mut f64) {
     for i in 0..n {
@@ -654,8 +797,6 @@ impl_unary!(vs_sin, VS_SIN, f32, f32);
 impl_unary!(vd_cos, VD_COS, f64, f64);
 impl_unary!(vs_cos, VS_COS, f32, f32);
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -717,7 +858,6 @@ mod tests {
         let rel_diff = (diff * 1e8).round() / 1e8;
         assert!(rel_diff <= 1e-6 || nan_inf, "{} != {}, x: {}, diff: {}", y_result, y, x, diff);
     }
-
 
     fn check_sin(x: f32, y: f32) {
         let x = x as f64;

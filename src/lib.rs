@@ -1,14 +1,9 @@
-
 pub(crate) mod unary;
 use once_cell::sync::Lazy;
 
 pub(crate) static RUNTIME_HW_CONFIG: Lazy<CpuFeatures> = Lazy::new(|| detect_hw_config());
 
-pub use unary::{
-    vs_cos, vs_exp, vs_ln, vs_sin, vs_sqrt, vs_tanh,
-    vd_cos, vd_exp, vd_ln, vd_sin, vd_sqrt, vd_tanh,
-};
-
+pub use unary::{vd_cos, vd_exp, vd_ln, vd_sin, vd_sqrt, vd_tanh, vs_cos, vs_exp, vs_ln, vs_sin, vs_sqrt, vs_tanh};
 
 #[cfg(target_arch = "x86_64")]
 #[derive(Copy, Clone)]
@@ -96,5 +91,3 @@ fn detect_hw_config() -> CpuFeatures {
         return CpuFeatures { dummy: false };
     }
 }
-
-
