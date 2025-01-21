@@ -80,7 +80,12 @@ macro_rules! impl_unary {
             assert!(n > 0);
             let fn_sequantial = *$fn;
             let num_per_thread_min = 1000000;
-            let num_thread_max = 8;
+            let host_num_threads = std::thread::available_parallelism().map_or(1, |x| x.get());
+            // read MATHFUN_NUM_THREADS env variable
+            let num_thread_max = std::env::var("MATHFUN_NUM_THREADS")
+                .ok()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(host_num_threads);
             let n_per_thread = (n + num_thread_max - 1) / num_thread_max;
             let num_thread = if n_per_thread >= num_per_thread_min {
                 num_thread_max
