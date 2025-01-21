@@ -8,9 +8,9 @@ use core::arch::x86_64::*;
 
 use crate::RUNTIME_HW_CONFIG;
 
-pub static VD_EXP: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_exp_fallback);
+pub static VD_EXP: Lazy<unsafe fn(usize, *const f64, *mut f64)> = Lazy::new(|| vd_exp_fallback);
 
-pub static VS_EXP: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
+pub static VS_EXP: Lazy<unsafe fn(usize, *const f32, *mut f32)> = Lazy::new(|| {
     if RUNTIME_HW_CONFIG.avx512f {
         return vs_exp_avx512f_asm;
     }
@@ -20,9 +20,9 @@ pub static VS_EXP: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
     vs_exp_fallback
 });
 
-pub static VD_LN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_ln_fallback);
+pub static VD_LN: Lazy<unsafe fn(usize, *const f64, *mut f64)> = Lazy::new(|| vd_ln_fallback);
 
-pub static VS_LN: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
+pub static VS_LN: Lazy<unsafe fn(usize, *const f32, *mut f32)> = Lazy::new(|| {
     if RUNTIME_HW_CONFIG.avx512f {
         return vs_ln_avx512f_asm;
     }
@@ -32,9 +32,9 @@ pub static VS_LN: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
     vs_ln_fallback
 });
 
-pub static VD_TANH: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_tanh_fallback);
+pub static VD_TANH: Lazy<unsafe fn(usize, *const f64, *mut f64)> = Lazy::new(|| vd_tanh_fallback);
 
-pub static VS_TANH: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
+pub static VS_TANH: Lazy<unsafe fn(usize, *const f32, *mut f32)> = Lazy::new(|| {
     if RUNTIME_HW_CONFIG.avx512f {
         return vs_tanh_avx512f_asm;
     }
@@ -44,7 +44,7 @@ pub static VS_TANH: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
     vs_tanh_fallback
 });
 
-pub static VD_SQRT: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
+pub static VD_SQRT: Lazy<unsafe fn(usize, *const f64, *mut f64)> = Lazy::new(|| {
     if RUNTIME_HW_CONFIG.avx512f {
         return vd_sqrt_avx512f_asm;
     }
@@ -54,7 +54,7 @@ pub static VD_SQRT: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| {
     vd_sqrt_fallback
 });
 
-pub static VS_SQRT: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
+pub static VS_SQRT: Lazy<unsafe fn(usize, *const f32, *mut f32)> = Lazy::new(|| {
     if RUNTIME_HW_CONFIG.avx512f {
         return vs_sqrt_avx512f_asm;
     }
@@ -64,19 +64,19 @@ pub static VS_SQRT: Lazy<unsafe fn(i64, *const f32, *mut f32)> = Lazy::new(|| {
     vs_sqrt_fallback
 });
 
-pub static VD_SIN: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_sin_fallback);
+pub static VD_SIN: Lazy<unsafe fn(usize, *const f64, *mut f64)> = Lazy::new(|| vd_sin_fallback);
 
-pub static VS_SIN: Lazy<unsafe fn(i64, *const f32, *mut f32)> =
+pub static VS_SIN: Lazy<unsafe fn(usize, *const f32, *mut f32)> =
     Lazy::new(|| if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma { vs_sin_avx2_fma } else { vs_sin_fallback });
 
-pub static VD_COS: Lazy<unsafe fn(i64, *const f64, *mut f64)> = Lazy::new(|| vd_cos_fallback);
+pub static VD_COS: Lazy<unsafe fn(usize, *const f64, *mut f64)> = Lazy::new(|| vd_cos_fallback);
 
-pub static VS_COS: Lazy<unsafe fn(i64, *const f32, *mut f32)> =
+pub static VS_COS: Lazy<unsafe fn(usize, *const f32, *mut f32)> =
     Lazy::new(|| if RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma { vs_cos_avx2_fma } else { vs_cos_fallback });
 
 macro_rules! impl_unary {
     ($name:ident, $fn:ident, $ta:ty, $tb:ty) => {
-        pub unsafe fn $name(n: i64, a: *const $ta, y: *mut $tb) {
+        pub unsafe fn $name(n: usize, a: *const $ta, y: *mut $tb) {
             assert!(n > 0);
             let fn_sequantial = *$fn;
             let num_per_thread_min = 1000000;
@@ -109,8 +109,8 @@ macro_rules! impl_unary {
 }
 
 #[target_feature(enable = "avx,avx2,fma")]
-unsafe fn vs_exp_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
-    const NR: i64 = 8;
+unsafe fn vs_exp_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 8;
     // Constants
     const EXP_HI: f32 = 88.7228391117 * 1.0;
     const EXP_LO: f32 = -88.7228391117 * 1.0;
@@ -142,7 +142,7 @@ unsafe fn vs_exp_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let e_sqrt = _mm256_set1_ps(1.6487212707);
 
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_ps(a.offset(i as isize));
 
         // Clamp x
@@ -187,7 +187,7 @@ unsafe fn vs_exp_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
-unsafe fn vs_exp_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
+unsafe fn vs_exp_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
     // Constants
     // use asm until avx512f is stabilized
     const EXP_HI: f32 = 88.3762626647949 * 2.0;
@@ -269,8 +269,8 @@ unsafe fn vs_exp_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
 }
 
 #[target_feature(enable = "avx,avx2,fma")]
-unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
-    const NR: i64 = 8;
+unsafe fn vs_tanh_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 8;
     // Constants
     const EXP_HI: f32 = 88.7228391117 * 1.0;
     const EXP_LO: f32 = -88.7228391117 * 1.0;
@@ -305,7 +305,7 @@ unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let e_sqrt = _mm256_set1_ps(1.6487212707);
 
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         let x0 = x;
         let x0 = _mm256_max_ps(exp_hi, x0);
@@ -361,7 +361,7 @@ unsafe fn vs_tanh_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
-unsafe fn vs_tanh_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
+unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
     // Constants
     // use asm until avx512f is stabilized
     const EXP_HI: f32 = 88.3762626647949 * 1.0;
@@ -467,8 +467,8 @@ unsafe fn vs_tanh_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
 }
 
 #[target_feature(enable = "avx,avx2,fma")]
-unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
-    const NR: i64 = 8;
+unsafe fn vs_sin_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 8;
     // define constants
 
     const DP1: f32 = -0.78515625;
@@ -511,7 +511,7 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let inv_sign_mask = _mm256_castsi256_ps(inv_sign_mask);
 
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         let mut sign_bit = x;
         // take the absolute value
@@ -585,10 +585,10 @@ unsafe fn vs_sin_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
 }
 
 #[target_feature(enable = "avx")]
-unsafe fn vs_sqrt_avx(n: i64, a: *const f32, b: *mut f32) {
-    const NR: i64 = 8;
+unsafe fn vs_sqrt_avx(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 8;
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         let y = _mm256_sqrt_ps(x);
         _mm256_storeu_ps(b.offset(i as isize), y);
@@ -600,7 +600,8 @@ unsafe fn vs_sqrt_avx(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
-unsafe fn vs_sqrt_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
+unsafe fn vs_sqrt_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 16;
     // Constants
     // use asm until avx512f is stabilized
     let mut i = 0;
@@ -624,7 +625,7 @@ unsafe fn vs_sqrt_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
         ax = inout(reg) a => _,
         bx = inout(reg) b => _,
         ix = inout(reg) i => i,
-        nx = inout(reg) n / 16 * 16 => _,
+        nx = inout(reg) n / NR * NR => _,
         out("zmm9") _,
         options(att_syntax)
     );
@@ -635,10 +636,10 @@ unsafe fn vs_sqrt_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
 }
 
 #[target_feature(enable = "avx")]
-unsafe fn vd_sqrt_avx(n: i64, a: *const f64, b: *mut f64) {
-    const NR: i64 = 4;
+unsafe fn vd_sqrt_avx(n: usize, a: *const f64, b: *mut f64) {
+    const NR: usize = 4;
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_pd(a.offset(i as isize));
         let y = _mm256_sqrt_pd(x);
         _mm256_storeu_pd(b.offset(i as isize), y);
@@ -650,7 +651,8 @@ unsafe fn vd_sqrt_avx(n: i64, a: *const f64, b: *mut f64) {
     }
 }
 
-unsafe fn vd_sqrt_avx512f_asm(n: i64, a: *const f64, b: *mut f64) {
+unsafe fn vd_sqrt_avx512f_asm(n: usize, a: *const f64, b: *mut f64) {
+    const NR: usize = 8;
     // Constants
     // use asm until avx512f is stabilized
     let mut i = 0;
@@ -674,7 +676,7 @@ unsafe fn vd_sqrt_avx512f_asm(n: i64, a: *const f64, b: *mut f64) {
         ax = inout(reg) a => _,
         bx = inout(reg) b => _,
         ix = inout(reg) i => i,
-        nx = inout(reg) n / 16 * 16 => _,
+        nx = inout(reg) n / NR * NR => _,
         out("zmm9") _,
         options(att_syntax)
     );
@@ -685,8 +687,8 @@ unsafe fn vd_sqrt_avx512f_asm(n: i64, a: *const f64, b: *mut f64) {
 }
 
 #[target_feature(enable = "avx,avx2,fma")]
-unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
-    const NR: i64 = 8;
+unsafe fn vs_cos_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 8;
     // define constants
 
     const DP1: f32 = -0.78515625;
@@ -727,7 +729,7 @@ unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let inv_sign_mask = _mm256_castsi256_ps(inv_sign_mask);
 
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_ps(a.offset(i as isize));
         // take the absolute value
         let x = _mm256_and_ps(x, inv_sign_mask);
@@ -795,7 +797,8 @@ unsafe fn vs_cos_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
-unsafe fn vs_ln_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
+unsafe fn vs_ln_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 16;
     // define constants
     const LN2F_HI: f32 = 0.693359375;
     const LN2F_LO: f32 = -2.12194440E-4;
@@ -887,7 +890,7 @@ unsafe fn vs_ln_avx512f_asm(n: i64, a: *const f32, b: *mut f32) {
         ax = inout(reg) a => _,
         bx = inout(reg) b => _,
         ix = inout(reg) i => i,
-        nx = inout(reg) n / 16 * 16 => _,
+        nx = inout(reg) n / NR * NR => _,
         out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
         out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
         out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
@@ -960,8 +963,8 @@ unsafe fn _mm256_get_exp_mant_ps(a: __m256) -> (__m256, __m256) {
 }
 
 #[target_feature(enable = "avx,avx2,fma")]
-unsafe fn vs_ln_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
-    const NR: i64 = 8;
+unsafe fn vs_ln_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 8;
     // define constants
     const LN2F_HI: f32 = 0.693359375;
     const LN2F_LO: f32 = -2.12194440E-4;
@@ -995,12 +998,8 @@ unsafe fn vs_ln_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     let log2onehalf = _mm256_set1_ps(0.58496250072);
 
     let mut i = 0;
-    while i <= (n - NR) {
+    while (i + NR) <= n {
         let x = _mm256_loadu_ps(a.offset(i as isize));
-        // mask to check which ares zero
-        // let mut exp = _mm256_getexp_ps(x);
-
-        // let mut x = _mm256_getmant_ps(x, _MM_MANT_NORM_P5_1, _MM_MANT_SIGN_SRC);
 
         let (mut exp, mut x) = _mm256_get_exp_mant_ps(x);
 
@@ -1035,73 +1034,73 @@ unsafe fn vs_ln_avx2_fma(n: i64, a: *const f32, b: *mut f32) {
     }
 }
 
-pub(crate) unsafe fn vd_exp_fallback(n: i64, a: *const f64, y: *mut f64) {
+pub(crate) unsafe fn vd_exp_fallback(n: usize, a: *const f64, y: *mut f64) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).exp();
     }
 }
 
-pub(crate) unsafe fn vs_exp_fallback(n: i64, a: *const f32, y: *mut f32) {
+pub(crate) unsafe fn vs_exp_fallback(n: usize, a: *const f32, y: *mut f32) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).exp();
     }
 }
 
-pub(crate) unsafe fn vd_ln_fallback(n: i64, a: *const f64, y: *mut f64) {
+pub(crate) unsafe fn vd_ln_fallback(n: usize, a: *const f64, y: *mut f64) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).ln();
     }
 }
 
-pub(crate) unsafe fn vs_ln_fallback(n: i64, a: *const f32, y: *mut f32) {
+pub(crate) unsafe fn vs_ln_fallback(n: usize, a: *const f32, y: *mut f32) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).ln();
     }
 }
 
-pub(crate) unsafe fn vd_tanh_fallback(n: i64, a: *const f64, y: *mut f64) {
+pub(crate) unsafe fn vd_tanh_fallback(n: usize, a: *const f64, y: *mut f64) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).tanh();
     }
 }
 
-pub(crate) unsafe fn vs_tanh_fallback(n: i64, a: *const f32, y: *mut f32) {
+pub(crate) unsafe fn vs_tanh_fallback(n: usize, a: *const f32, y: *mut f32) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).tanh();
     }
 }
 
-pub(crate) unsafe fn vd_sqrt_fallback(n: i64, a: *const f64, y: *mut f64) {
+pub(crate) unsafe fn vd_sqrt_fallback(n: usize, a: *const f64, y: *mut f64) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).sqrt();
     }
 }
 
-pub(crate) unsafe fn vs_sqrt_fallback(n: i64, a: *const f32, y: *mut f32) {
+pub(crate) unsafe fn vs_sqrt_fallback(n: usize, a: *const f32, y: *mut f32) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).sqrt();
     }
 }
 
-pub(crate) unsafe fn vd_sin_fallback(n: i64, a: *const f64, y: *mut f64) {
+pub(crate) unsafe fn vd_sin_fallback(n: usize, a: *const f64, y: *mut f64) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).sin();
     }
 }
 
-pub(crate) unsafe fn vs_sin_fallback(n: i64, a: *const f32, y: *mut f32) {
+pub(crate) unsafe fn vs_sin_fallback(n: usize, a: *const f32, y: *mut f32) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).sin();
     }
 }
 
-pub(crate) unsafe fn vd_cos_fallback(n: i64, a: *const f64, y: *mut f64) {
+pub(crate) unsafe fn vd_cos_fallback(n: usize, a: *const f64, y: *mut f64) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).cos();
     }
 }
 
-pub(crate) unsafe fn vs_cos_fallback(n: i64, a: *const f32, y: *mut f32) {
+pub(crate) unsafe fn vs_cos_fallback(n: usize, a: *const f32, y: *mut f32) {
     for i in 0..n {
         *y.offset(i as isize) = (*a.offset(i as isize)).cos();
     }
@@ -1264,7 +1263,7 @@ mod tests {
         let (a, mut b) = full_range_f32_pair();
         let a_len = a.len();
         unsafe {
-            vs_sqrt(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+            vs_sqrt(a_len, a.as_ptr(), b.as_mut_ptr());
         }
         for i in 0..a_len {
             check_sqrt(a[i], b[i]);
@@ -1276,7 +1275,7 @@ mod tests {
         let (a, mut b) = full_range_f32_pair();
         let a_len = a.len();
         unsafe {
-            vs_sin(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+            vs_sin(a_len, a.as_ptr(), b.as_mut_ptr());
         }
         for i in 0..a_len {
             check_sin(a[i], b[i]);
@@ -1288,7 +1287,7 @@ mod tests {
         let (a, mut b) = full_range_f32_pair();
         let a_len = a.len();
         unsafe {
-            vs_cos(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+            vs_cos(a_len, a.as_ptr(), b.as_mut_ptr());
         }
         for i in 0..a_len {
             check_cos(a[i], b[i]);
@@ -1300,7 +1299,7 @@ mod tests {
         let (a, mut b) = full_range_f32_pair();
         let a_len = a.len();
         unsafe {
-            vs_exp(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+            vs_exp(a_len, a.as_ptr(), b.as_mut_ptr());
         }
         for i in 0..a_len {
             check_exp(a[i], b[i]);
@@ -1312,7 +1311,7 @@ mod tests {
         let (a, mut b) = full_range_f32_pair();
         let a_len = a.len();
         unsafe {
-            vs_tanh(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+            vs_tanh(a_len, a.as_ptr(), b.as_mut_ptr());
         }
         for i in 0..a_len {
             check_tanh(a[i], b[i]);
@@ -1323,7 +1322,7 @@ mod tests {
         let (a, mut b) = full_range_f32_pair();
         let a_len = a.len();
         unsafe {
-            vs_ln(a_len as i64, a.as_ptr(), b.as_mut_ptr());
+            vs_ln(a_len, a.as_ptr(), b.as_mut_ptr());
         }
         for i in 0..a_len {
             check_ln(a[i], b[i]);
