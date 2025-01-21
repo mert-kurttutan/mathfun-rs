@@ -2,6 +2,11 @@
 name = "mathfun"
 version = "0.1.0"
 edition = "2021"
+authors = ["mert-kurttutan"]
+description = "high-performance math functions"
+license = "MIT"
+keywords = ["high-performance", "math"]
+rust-version = "1.65"
 
 [dependencies]
 once_cell = "1.20.2"
