@@ -10,7 +10,7 @@ checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
 
 [[package]]
 name = "mathfun"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "once_cell",
  "raw-cpuid",

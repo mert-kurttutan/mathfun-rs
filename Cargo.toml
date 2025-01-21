@@ -1,6 +1,6 @@
 [package]
 name = "mathfun"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["mert-kurttutan"]
 description = "high-performance math functions"
