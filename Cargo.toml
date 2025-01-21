@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 authors = ["mert-kurttutan"]
 description = "high-performance math functions"
+readme = "./README.md"
 license = "MIT"
 keywords = ["high-performance", "math"]
+repository = "https://github.com/mert-kurttutan/mathfun-rs"
 rust-version = "1.65"
 
 [dependencies]
