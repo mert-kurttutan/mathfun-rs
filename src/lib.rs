@@ -5,6 +5,7 @@ pub(crate) static RUNTIME_HW_CONFIG: Lazy<CpuFeatures> = Lazy::new(|| detect_hw_
 
 pub use unary::{vd_cos, vd_exp, vd_ln, vd_sin, vd_sqrt, vd_tanh, vs_cos, vs_exp, vs_ln, vs_sin, vs_sqrt, vs_tanh};
 
+#[allow(unused)]
 #[cfg(target_arch = "x86_64")]
 #[derive(Copy, Clone)]
 pub(crate) struct CpuFeatures {
