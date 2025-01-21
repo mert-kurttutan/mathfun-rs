@@ -77,9 +77,11 @@ pub static VS_COS: Lazy<unsafe fn(usize, *const f32, *mut f32)> =
 macro_rules! impl_unary {
     ($name:ident, $fn:ident, $ta:ty, $tb:ty) => {
         pub unsafe fn $name(n: usize, a: *const $ta, y: *mut $tb) {
-            assert!(n > 0);
+            if n == 0 {
+                return;
+            }
             let fn_sequantial = *$fn;
-            let num_per_thread_min = 1000000;
+            let num_per_thread_min = 100000;
             let host_num_threads = std::thread::available_parallelism().map_or(1, |x| x.get());
             // read MATHFUN_NUM_THREADS env variable
             let num_thread_max = std::env::var("MATHFUN_NUM_THREADS")
@@ -92,6 +94,8 @@ macro_rules! impl_unary {
             } else {
                 (n + num_per_thread_min - 1) / num_per_thread_min
             };
+            // upper bound by 2
+            let num_thread = num_thread.min(2);
             let num_per_thread = (n + num_thread - 1) / num_thread;
             let a_usize = a as usize;
             let y_usize = y as usize;
@@ -193,6 +197,7 @@ unsafe fn vs_exp_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
 }
 
 unsafe fn vs_exp_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 16;
     // Constants
     // use asm until avx512f is stabilized
     const EXP_HI: f32 = 88.3762626647949 * 2.0;
@@ -260,7 +265,7 @@ unsafe fn vs_exp_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
         ax = inout(reg) a => _,
         bx = inout(reg) b => _,
         ix = inout(reg) i => i,
-        nx = inout(reg) n / 16 * 16 => _,
+        nx = inout(reg) n / NR * NR => _,
         out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
         out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
         out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
@@ -367,6 +372,7 @@ unsafe fn vs_tanh_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
 }
 
 unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+    const NR: usize = 16;
     // Constants
     // use asm until avx512f is stabilized
     const EXP_HI: f32 = 88.3762626647949 * 1.0;
@@ -458,7 +464,7 @@ unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
         ax = inout(reg) a => _,
         bx = inout(reg) b => _,
         ix = inout(reg) i => i,
-        nx = inout(reg) n / 16 * 16 => _,
+        nx = inout(reg) n / NR * NR => _,
         out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
         out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
         out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
@@ -1039,77 +1045,35 @@ unsafe fn vs_ln_avx2_fma(n: usize, a: *const f32, b: *mut f32) {
     }
 }
 
-pub(crate) unsafe fn vd_exp_fallback(n: usize, a: *const f64, y: *mut f64) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).exp();
-    }
+macro_rules! impl_fallback {
+    ($name:ident, $n:ident, $t:ty) => {
+        pub(crate) unsafe fn $name(n: usize, a: *const $t, b: *mut $t) {
+            let mut i = 0;
+            while i < n {
+                *b.offset(i as isize) = (*a.offset(i as isize)).$n();
+                i += 1;
+            }
+        }
+    };
 }
 
-pub(crate) unsafe fn vs_exp_fallback(n: usize, a: *const f32, y: *mut f32) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).exp();
-    }
-}
+impl_fallback!(vd_exp_fallback, exp, f64);
+impl_fallback!(vs_exp_fallback, exp, f32);
 
-pub(crate) unsafe fn vd_ln_fallback(n: usize, a: *const f64, y: *mut f64) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).ln();
-    }
-}
+impl_fallback!(vd_ln_fallback, ln, f64);
+impl_fallback!(vs_ln_fallback, ln, f32);
 
-pub(crate) unsafe fn vs_ln_fallback(n: usize, a: *const f32, y: *mut f32) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).ln();
-    }
-}
+impl_fallback!(vd_tanh_fallback, tanh, f64);
+impl_fallback!(vs_tanh_fallback, tanh, f32);
 
-pub(crate) unsafe fn vd_tanh_fallback(n: usize, a: *const f64, y: *mut f64) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).tanh();
-    }
-}
+impl_fallback!(vd_sqrt_fallback, sqrt, f64);
+impl_fallback!(vs_sqrt_fallback, sqrt, f32);
 
-pub(crate) unsafe fn vs_tanh_fallback(n: usize, a: *const f32, y: *mut f32) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).tanh();
-    }
-}
+impl_fallback!(vd_sin_fallback, sin, f64);
+impl_fallback!(vs_sin_fallback, sin, f32);
 
-pub(crate) unsafe fn vd_sqrt_fallback(n: usize, a: *const f64, y: *mut f64) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).sqrt();
-    }
-}
-
-pub(crate) unsafe fn vs_sqrt_fallback(n: usize, a: *const f32, y: *mut f32) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).sqrt();
-    }
-}
-
-pub(crate) unsafe fn vd_sin_fallback(n: usize, a: *const f64, y: *mut f64) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).sin();
-    }
-}
-
-pub(crate) unsafe fn vs_sin_fallback(n: usize, a: *const f32, y: *mut f32) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).sin();
-    }
-}
-
-pub(crate) unsafe fn vd_cos_fallback(n: usize, a: *const f64, y: *mut f64) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).cos();
-    }
-}
-
-pub(crate) unsafe fn vs_cos_fallback(n: usize, a: *const f32, y: *mut f32) {
-    for i in 0..n {
-        *y.offset(i as isize) = (*a.offset(i as isize)).cos();
-    }
-}
+impl_fallback!(vd_cos_fallback, cos, f64);
+impl_fallback!(vs_cos_fallback, cos, f32);
 
 impl_unary!(vd_exp, VD_EXP, f64, f64);
 impl_unary!(vs_exp, VS_EXP, f32, f32);
@@ -1332,5 +1296,53 @@ mod tests {
         for i in 0..a_len {
             check_ln(a[i], b[i]);
         }
+    }
+    const PROJECT_DIR: &str = "C:\\Users\\I011745\\Desktop\\corenum\\pire\\.venv\\Library\\bin";
+    use libc::{c_float, c_int};
+
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+    static MATHFUN_LIBRARY: Lazy<libloading::Library> = Lazy::new(|| unsafe {
+        #[cfg(target_os = "windows")]
+        let default_cblas_path = format!("{PROJECT_DIR}/mkl_rt.2.dll");
+        #[cfg(target_os = "linux")]
+        let default_cblas_path = format!("{PROJECT_DIR}/../../.venv/lib/libmkl_rt.so.2");
+        let cblas_path = std::env::var("PIRE_MATHFUN_PATH").unwrap_or(default_cblas_path);
+        libloading::Library::new(cblas_path).unwrap()
+    });
+    type UnaryFnF32 = unsafe extern "C" fn(c_int, *const c_float, *mut c_float);
+
+    fn random_matrix_std<T>(arr: &mut [T])
+    where
+        rand::distributions::Standard: rand::prelude::Distribution<T>,
+    {
+        let mut x = StdRng::seed_from_u64(43);
+        arr.iter_mut().for_each(|p| *p = x.gen::<T>());
+    }
+    static VS_EXP_MKL: Lazy<libloading::Symbol<'static, UnaryFnF32>> = Lazy::new(|| unsafe {
+        let unary_fn = MATHFUN_LIBRARY.get(b"vsExp").unwrap();
+        unary_fn
+    });
+
+    unsafe fn vs_exp_mkl(n: c_int, a: *const c_float, y: *mut c_float) {
+        VS_EXP_MKL(n, a, y);
+    }
+    #[test]
+    fn mkl_test() {
+        let m = 1 << 31 - 1;
+        let mut a = vec![1.0; m];
+        let mut b = vec![1.0; m];
+        random_matrix_std(&mut a);
+        random_matrix_std(&mut b);
+        let a_len = a.len();
+        let a_len_i32 = a_len as i32;
+        println!("a_len_i32: {}", a_len_i32);
+        let t0 = std::time::Instant::now();
+        unsafe {
+            vs_exp_mkl(a_len_i32, a.as_ptr(), b.as_mut_ptr());
+            // vs_exp(a_len, a.as_ptr(), b.as_mut_ptr());
+        }
+        let t1 = std::time::Instant::now();
+        println!("time: {:?}", t1 - t0);
     }
 }
