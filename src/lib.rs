@@ -35,6 +35,18 @@ pub struct CpuFeatures {
     pub ssse3: bool,
 }
 
+#[cfg(target_arch = "aarch64")]
+#[derive(Copy, Clone)]
+pub struct CpuFeatures {
+    pub sve: bool,
+    pub neon: bool,
+    pub fp16: bool,
+    pub f32mm: bool,
+    pub fcma: bool,
+    pub i8mm: bool,
+}
+
+#[cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64"))]
 #[inline]
 fn detect_hw_config() -> CpuFeatures {
     #[cfg(target_arch = "x86_64")]
@@ -96,9 +108,5 @@ fn detect_hw_config() -> CpuFeatures {
         let i8mm = is_aarch64_feature_detected!("i8mm");
 
         return CpuFeatures { neon, sve, fp16, f32mm, fcma, i8mm };
-    }
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
-    {
-        return CpuFeatures { dummy: false };
     }
 }
