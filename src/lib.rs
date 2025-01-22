@@ -25,6 +25,16 @@ pub(crate) struct CpuFeatures {
     pub(crate) f16c: bool,
 }
 
+#[allow(unused)]
+#[cfg(target_arch = "x86")]
+#[derive(Copy, Clone)]
+pub struct CpuFeatures {
+    pub sse: bool,
+    pub sse2: bool,
+    pub sse3: bool,
+    pub ssse3: bool,
+}
+
 #[inline]
 fn detect_hw_config() -> CpuFeatures {
     #[cfg(target_arch = "x86_64")]

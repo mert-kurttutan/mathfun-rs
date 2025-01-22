@@ -2,19 +2,17 @@
 // and changed according to several factors, (e.g. different simd extensions, correctness for large values of exp)
 // avx_mathfun project: https://github.com/reyoung/avx_mathfun
 
-use core::arch::asm;
-use core::arch::x86_64::*;
-
 use crate::RUNTIME_HW_CONFIG;
 
 macro_rules! impl_unary {
     (
         $name:ident, $dispatch_fn:ident, $ta:ty, $tb:ty,
-        $fallback:ident, $($extension:expr => $fn_simd:ident,)*
+        $fallback:ident, $($target_arch:tt | $extension:expr => $fn_simd:ident,)*
 
     ) => {
         fn $dispatch_fn() -> unsafe fn(usize, *const $ta, *mut $tb) {
             $(
+                #[cfg(target_arch = $target_arch)]
                 if $extension {
                     return $fn_simd;
                 }
@@ -61,69 +59,6 @@ macro_rules! impl_unary {
         }
     };
 }
-
-impl_unary!(vd_exp, dispatch_vd_exp, f64, f64, vd_exp_fallback,);
-
-impl_unary!(
-    vs_exp, dispatch_vs_exp, f32, f32,
-    vs_exp_fallback,
-    RUNTIME_HW_CONFIG.avx512f => vs_exp_avx512f_asm,
-    RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_exp_avx2_fma,
-    RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_exp_avx_sse2,
-    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_exp_sse2,
-);
-
-impl_unary!(vd_ln, dispatch_vd_ln, f64, f64, vd_ln_fallback,);
-impl_unary!(
-    vs_ln, dispatch_vs_ln, f32, f32,
-    vs_ln_fallback,
-    RUNTIME_HW_CONFIG.avx512f => vs_ln_avx512f_asm,
-    RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_ln_avx2_fma,
-    RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_ln_avx_sse2,
-    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_ln_sse2,
-);
-
-impl_unary!(vd_tanh, dispatch_vd_tanh, f64, f64, vd_tanh_fallback,);
-
-impl_unary!(
-    vs_tanh, dispatch_vs_tanh, f32, f32,
-    vs_tanh_fallback,
-    RUNTIME_HW_CONFIG.avx512f => vs_tanh_avx512f_asm,
-    RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_tanh_avx2_fma,
-    RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_tanh_avx_sse2,
-    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_tanh_sse2,
-);
-
-impl_unary!(
-    vd_sqrt, dispatch_vd_sqrt, f64, f64,
-    vd_sqrt_fallback,
-    RUNTIME_HW_CONFIG.avx512f => vd_sqrt_avx512f_asm,
-    RUNTIME_HW_CONFIG.avx => vd_sqrt_avx,
-);
-impl_unary!(
-    vs_sqrt, dispatch_vs_sqrt, f32, f32,
-    vs_sqrt_fallback,
-    RUNTIME_HW_CONFIG.avx512f => vs_sqrt_avx512f_asm,
-    RUNTIME_HW_CONFIG.avx => vs_sqrt_avx,
-);
-
-impl_unary!(vd_sin, dispatch_vd_sin, f64, f64, vd_sin_fallback,);
-impl_unary!(
-    vs_sin, dispatch_vs_sin, f32, f32,
-    vs_sin_fallback,
-    RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_sin_avx2_fma,
-    RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_sin_avx_sse2,
-    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_sin_sse2,
-);
-
-impl_unary!(vd_cos, dispatch_vd_cos, f64, f64, vd_cos_fallback,);
-impl_unary!(
-    vs_cos, dispatch_vs_cos, f32, f32,
-    vs_cos_fallback,
-    RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_cos_avx2_fma,
-    RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_cos_avx_sse2,
-    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_cos_sse2,
-);
 
 macro_rules! impl_cos {
     ($simd:tt, $features:tt, $fn_name:ident) => {
@@ -209,7 +144,7 @@ macro_rules! impl_cos {
             }
         }
 
-        unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
+        pub(crate) unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
             $simd::vs_cos(n, a, b);
         }
     };
@@ -328,7 +263,7 @@ macro_rules! impl_sin {
             }
         }
 
-        unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
+        pub(crate) unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
             $simd::vs_sin(n, a, b);
         }
     };
@@ -409,7 +344,7 @@ macro_rules! impl_ln {
             }
         }
 
-        unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
+        pub(crate) unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
             $simd::vs_ln(n, a, b);
         }
     };
@@ -497,7 +432,7 @@ macro_rules! impl_exp {
             }
         }
 
-        unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
+        pub(crate) unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
             $simd::vs_exp(n, a, b);
         }
     };
@@ -585,7 +520,7 @@ macro_rules! impl_exp {
             }
         }
 
-        unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
+        pub(crate) unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
             $simd::vs_exp(n, a, b);
         }
     };
@@ -677,1066 +612,1163 @@ macro_rules! impl_tanh {
             }
         }
 
-        unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
+        pub(crate) unsafe fn $fn_name(n: usize, a: *const f32, b: *mut f32) {
             $simd::vs_tanh(n, a, b);
         }
     };
 }
 
-impl_cos!(Avx2Fma, "avx,avx2,fma", vs_cos_avx2_fma);
-impl_sin!(Avx2Fma, "avx,avx2,fma", vs_sin_avx2_fma);
-impl_ln!(Avx2Fma, "avx,avx2,fma", vs_ln_avx2_fma);
-impl_exp!(Avx2Fma, "avx,avx2,fma", vs_exp_avx2_fma, FMA);
-impl_tanh!(Avx2Fma, "avx,avx2,fma", vs_tanh_avx2_fma);
+impl_unary!(vd_exp, dispatch_vd_exp, f64, f64, vd_exp_fallback,);
 
-impl_cos!(AvxSse2, "avx,sse2", vs_cos_avx_sse2);
-impl_sin!(AvxSse2, "avx,sse2", vs_sin_avx_sse2);
-impl_ln!(AvxSse2, "avx,sse2", vs_ln_avx_sse2);
-impl_exp!(AvxSse2, "avx,sse2", vs_exp_avx_sse2, NO_FMA);
-impl_tanh!(AvxSse2, "avx,sse2", vs_tanh_avx_sse2);
+impl_unary!(
+    vs_exp, dispatch_vs_exp, f32, f32,
+    vs_exp_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx512f => vs_exp_avx512f_asm,
+    "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_exp_avx2_fma,
+    "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_exp_avx_sse2,
+    "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_exp_sse2,
+    "x86" | RUNTIME_HW_CONFIG.sse => vs_exp_sse2,
+);
 
-impl_cos!(Sse2, "sse,sse2", vs_cos_sse2);
-impl_sin!(Sse2, "sse,sse2", vs_sin_sse2);
-impl_ln!(Sse2, "sse,sse2", vs_ln_sse2);
-impl_exp!(Sse2, "sse,sse2", vs_exp_sse2, NO_FMA);
-impl_tanh!(Sse2, "sse,sse2", vs_tanh_sse2);
+impl_unary!(vd_ln, dispatch_vd_ln, f64, f64, vd_ln_fallback,);
+impl_unary!(
+    vs_ln, dispatch_vs_ln, f32, f32,
+    vs_ln_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx512f => vs_ln_avx512f_asm,
+    "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_ln_avx2_fma,
+    "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_ln_avx_sse2,
+    "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_ln_sse2,
+    "x86" | RUNTIME_HW_CONFIG.sse => vs_ln_sse2,
+);
 
-#[target_feature(enable = "avx")]
-unsafe fn vs_sqrt_avx(n: usize, a: *const f32, b: *mut f32) {
-    const NR: usize = 8;
-    let mut i = 0;
-    while (i + NR) <= n {
-        let x = _mm256_loadu_ps(a.offset(i as isize));
-        let y = _mm256_sqrt_ps(x);
-        _mm256_storeu_ps(b.offset(i as isize), y);
-        i += NR;
+impl_unary!(vd_tanh, dispatch_vd_tanh, f64, f64, vd_tanh_fallback,);
+
+impl_unary!(
+    vs_tanh, dispatch_vs_tanh, f32, f32,
+    vs_tanh_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx512f => vs_tanh_avx512f_asm,
+    "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_tanh_avx2_fma,
+    "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_tanh_avx_sse2,
+    "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_tanh_sse2,
+    "x86" | RUNTIME_HW_CONFIG.sse => vs_tanh_sse2,
+);
+
+impl_unary!(
+    vd_sqrt, dispatch_vd_sqrt, f64, f64,
+    vd_sqrt_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx512f => vd_sqrt_avx512f_asm,
+    "x86_64" | RUNTIME_HW_CONFIG.avx => vd_sqrt_avx,
+);
+impl_unary!(
+    vs_sqrt, dispatch_vs_sqrt, f32, f32,
+    vs_sqrt_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx512f => vs_sqrt_avx512f_asm,
+    "x86_64" | RUNTIME_HW_CONFIG.avx => vs_sqrt_avx,
+);
+
+impl_unary!(vd_sin, dispatch_vd_sin, f64, f64, vd_sin_fallback,);
+impl_unary!(
+    vs_sin, dispatch_vs_sin, f32, f32,
+    vs_sin_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_sin_avx2_fma,
+    "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_sin_avx_sse2,
+    "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_sin_sse2,
+    "x86" | RUNTIME_HW_CONFIG.sse => vs_sin_sse2,
+);
+
+impl_unary!(vd_cos, dispatch_vd_cos, f64, f64, vd_cos_fallback,);
+impl_unary!(
+    vs_cos, dispatch_vs_cos, f32, f32,
+    vs_cos_fallback,
+    "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_cos_avx2_fma,
+    "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_cos_avx_sse2,
+    "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_cos_sse2,
+    "x86" | RUNTIME_HW_CONFIG.sse => vs_cos_sse2,
+);
+
+#[cfg(target_arch = "x86_64")]
+mod avx2_fma_mod {
+    use core::arch::x86_64::*;
+    pub(crate) struct Avx2Fma {}
+
+    impl Avx2Fma {
+        const F32_WIDTH: usize = 8;
+        #[inline(always)]
+        unsafe fn set1_f32(x: f32) -> __m256 {
+            _mm256_set1_ps(x)
+        }
+        #[inline(always)]
+        unsafe fn set1_i32(x: i32) -> __m256i {
+            _mm256_set1_epi32(x)
+        }
+
+        #[inline(always)]
+        unsafe fn loadu_f32(ptr: *const f32) -> __m256 {
+            _mm256_loadu_ps(ptr)
+        }
+
+        #[inline(always)]
+        unsafe fn and_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_and_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn mul_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_mul_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_i32(a: __m256i, b: __m256i) -> __m256i {
+            _mm256_add_epi32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn and_i32(a: __m256i, b: __m256i) -> __m256i {
+            _mm256_and_si256(a, b)
+        }
+        #[inline(always)]
+        unsafe fn cvt_i32_f32(a: __m256i) -> __m256 {
+            _mm256_cvtepi32_ps(a)
+        }
+        #[inline(always)]
+        unsafe fn cvt_f32_i32(a: __m256) -> __m256i {
+            _mm256_cvtps_epi32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_i32(a: __m256i, b: __m256i) -> __m256i {
+            _mm256_sub_epi32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_i32(a: __m256i, b: __m256i) -> __m256i {
+            _mm256_andnot_si256(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn slli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
+            _mm256_slli_epi32(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn cmpeq_i32(a: __m256i, b: __m256i) -> __m256i {
+            _mm256_cmpeq_epi32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn cast_i32_f32(a: __m256i) -> __m256 {
+            _mm256_castsi256_ps(a)
+        }
+
+        #[inline(always)]
+        unsafe fn fmadd_f32(a: __m256, b: __m256, c: __m256) -> __m256 {
+            _mm256_fmadd_ps(a, b, c)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_andnot_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_add_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn xor_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_xor_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn storeu_f32(ptr: *mut f32, a: __m256) {
+            _mm256_storeu_ps(ptr, a)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_sub_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_f32<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
+            _mm256_cmp_ps(a, b, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn mask_mul_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
+            let one = _mm256_set1_ps(1.0);
+            let one = _mm256_andnot_ps(mask, one);
+            let masked_one = _mm256_and_ps(b, mask);
+            let masked_b = _mm256_or_ps(masked_one, one);
+            let c = _mm256_mul_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn mask_sub_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
+            let masked_b = _mm256_and_ps(b, mask);
+            let c = _mm256_sub_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn or_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_or_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn mask_add_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
+            let masked_b = _mm256_and_ps(b, mask);
+            let c = _mm256_add_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn cast_f32_i32(a: __m256) -> __m256i {
+            _mm256_castps_si256(a)
+        }
+
+        #[inline(always)]
+        unsafe fn srli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
+            _mm256_srli_epi32(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn min_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_min_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn round_f32<const IMM8: i32>(a: __m256) -> __m256 {
+            _mm256_round_ps(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn max_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_max_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn div_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_div_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
+            let a_0 = a;
+            let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+            let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
+            let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+            let denorm_mul = Self::set1_f32(134217730.);
+            let denorm_th = Self::set1_f32(1.1754945e-38);
+            let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+            let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
+
+            let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
+
+            /* keep only the fractional part */
+            a = Self::and_f32(a, inv_mant_mask);
+            a = Self::or_f32(a, Self::set1_f32(0.5));
+
+            // this is again another AVX2 instruction
+            imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
+
+            let e = Self::cvt_i32_f32(imm0);
+
+            let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
+            let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::min_f32(e, a_0);
+            let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
+
+            (e, a)
+        }
     }
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
-        i += 1;
+
+    impl_cos!(Avx2Fma, "avx,avx2,fma", vs_cos_avx2_fma);
+    impl_sin!(Avx2Fma, "avx,avx2,fma", vs_sin_avx2_fma);
+    impl_ln!(Avx2Fma, "avx,avx2,fma", vs_ln_avx2_fma);
+    impl_exp!(Avx2Fma, "avx,avx2,fma", vs_exp_avx2_fma, FMA);
+    impl_tanh!(Avx2Fma, "avx,avx2,fma", vs_tanh_avx2_fma);
+}
+#[cfg(target_arch = "x86_64")]
+pub(crate) use avx2_fma_mod::*;
+
+#[cfg(target_arch = "x86_64")]
+mod avx_sse2_mod {
+    use core::arch::x86_64::*;
+    pub(crate) struct AvxSse2 {}
+
+    impl AvxSse2 {
+        const F32_WIDTH: usize = 8;
+        #[inline(always)]
+        unsafe fn set1_f32(x: f32) -> __m256 {
+            _mm256_set1_ps(x)
+        }
+        #[inline(always)]
+        unsafe fn set1_i32(x: i32) -> __m256i {
+            _mm256_set1_epi32(x)
+        }
+
+        #[inline(always)]
+        unsafe fn loadu_f32(ptr: *const f32) -> __m256 {
+            _mm256_loadu_ps(ptr)
+        }
+
+        #[inline(always)]
+        unsafe fn and_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_and_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn mul_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_mul_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_i32(a: __m256i, b: __m256i) -> __m256i {
+            // extract second half of a and b
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let b1 = _mm256_extractf128_si256(b, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let b0 = _mm256_castsi256_si128(b);
+            let c0 = _mm_add_epi32(a0, b0);
+            let c1 = _mm_add_epi32(a1, b1);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+
+        #[inline(always)]
+        unsafe fn and_i32(a: __m256i, b: __m256i) -> __m256i {
+            // extract second half of a and b
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let b1 = _mm256_extractf128_si256(b, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let b0 = _mm256_castsi256_si128(b);
+            let c0 = _mm_and_si128(a0, b0);
+            let c1 = _mm_and_si128(a1, b1);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+        #[inline(always)]
+        unsafe fn cvt_i32_f32(a: __m256i) -> __m256 {
+            _mm256_cvtepi32_ps(a)
+        }
+        #[inline(always)]
+        unsafe fn cvt_f32_i32(a: __m256) -> __m256i {
+            _mm256_cvtps_epi32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_i32(a: __m256i, b: __m256i) -> __m256i {
+            // extract second half of a and b
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let b1 = _mm256_extractf128_si256(b, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let b0 = _mm256_castsi256_si128(b);
+            let c0 = _mm_sub_epi32(a0, b0);
+            let c1 = _mm_sub_epi32(a1, b1);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_i32(a: __m256i, b: __m256i) -> __m256i {
+            // extract second half of a and b
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let b1 = _mm256_extractf128_si256(b, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let b0 = _mm256_castsi256_si128(b);
+            let c0 = _mm_andnot_si128(a0, b0);
+            let c1 = _mm_andnot_si128(a1, b1);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+
+        #[inline(always)]
+        unsafe fn slli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
+            // extract second half of a and b
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let c0 = _mm_slli_epi32(a0, IMM8);
+            let c1 = _mm_slli_epi32(a1, IMM8);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+
+        #[inline(always)]
+        unsafe fn cmpeq_i32(a: __m256i, b: __m256i) -> __m256i {
+            // extract second half of a and b
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let b1 = _mm256_extractf128_si256(b, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let b0 = _mm256_castsi256_si128(b);
+            let c0 = _mm_cmpeq_epi32(a0, b0);
+            let c1 = _mm_cmpeq_epi32(a1, b1);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+
+        #[inline(always)]
+        unsafe fn cast_i32_f32(a: __m256i) -> __m256 {
+            _mm256_castsi256_ps(a)
+        }
+
+        #[inline(always)]
+        unsafe fn fmadd_f32(a: __m256, b: __m256, c: __m256) -> __m256 {
+            let mul = _mm256_mul_ps(a, b);
+            _mm256_add_ps(mul, c)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_andnot_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_add_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn xor_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_xor_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn storeu_f32(ptr: *mut f32, a: __m256) {
+            _mm256_storeu_ps(ptr, a)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_sub_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_f32<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
+            _mm256_cmp_ps(a, b, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn mask_mul_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
+            let one = _mm256_set1_ps(1.0);
+            let one = _mm256_andnot_ps(mask, one);
+            let masked_one = _mm256_and_ps(b, mask);
+            let masked_b = _mm256_or_ps(masked_one, one);
+            let c = _mm256_mul_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn mask_sub_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
+            let masked_b = _mm256_and_ps(b, mask);
+            let c = _mm256_sub_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn or_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_or_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn mask_add_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
+            let masked_b = _mm256_and_ps(b, mask);
+            let c = _mm256_add_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn cast_f32_i32(a: __m256) -> __m256i {
+            _mm256_castps_si256(a)
+        }
+
+        #[inline(always)]
+        unsafe fn srli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
+            // extract second half of a
+            let a1 = _mm256_extractf128_si256(a, 1);
+            let a0 = _mm256_castsi256_si128(a);
+            let c0 = _mm_srli_epi32(a0, IMM8);
+            let c1 = _mm_srli_epi32(a1, IMM8);
+            _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
+        }
+
+        #[inline(always)]
+        unsafe fn min_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_min_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn round_f32<const IMM8: i32>(a: __m256) -> __m256 {
+            _mm256_round_ps(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn max_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_max_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn div_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_div_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
+            let a_0 = a;
+            let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+            let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
+            let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+            let denorm_mul = Self::set1_f32(134217730.);
+            let denorm_th = Self::set1_f32(1.1754945e-38);
+            let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+            let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
+
+            let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
+
+            /* keep only the fractional part */
+            a = Self::and_f32(a, inv_mant_mask);
+            a = Self::or_f32(a, Self::set1_f32(0.5));
+
+            // this is again another AVX2 instruction
+            imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
+
+            let e = Self::cvt_i32_f32(imm0);
+
+            let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
+            let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::min_f32(e, a_0);
+            let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
+
+            (e, a)
+        }
+    }
+
+    impl_cos!(AvxSse2, "avx,sse2", vs_cos_avx_sse2);
+    impl_sin!(AvxSse2, "avx,sse2", vs_sin_avx_sse2);
+    impl_ln!(AvxSse2, "avx,sse2", vs_ln_avx_sse2);
+    impl_exp!(AvxSse2, "avx,sse2", vs_exp_avx_sse2, NO_FMA);
+    impl_tanh!(AvxSse2, "avx,sse2", vs_tanh_avx_sse2);
+
+    #[target_feature(enable = "avx")]
+    pub(crate) unsafe fn vs_sqrt_avx(n: usize, a: *const f32, b: *mut f32) {
+        const NR: usize = 8;
+        let mut i = 0;
+        while (i + NR) <= n {
+            let x = _mm256_loadu_ps(a.offset(i as isize));
+            let y = _mm256_sqrt_ps(x);
+            _mm256_storeu_ps(b.offset(i as isize), y);
+            i += NR;
+        }
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+            i += 1;
+        }
+    }
+
+    #[target_feature(enable = "avx")]
+    pub(crate) unsafe fn vd_sqrt_avx(n: usize, a: *const f64, b: *mut f64) {
+        const NR: usize = 4;
+        let mut i = 0;
+        while (i + NR) <= n {
+            let x = _mm256_loadu_pd(a.offset(i as isize));
+            let y = _mm256_sqrt_pd(x);
+            _mm256_storeu_pd(b.offset(i as isize), y);
+            i += NR;
+        }
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+            i += 1;
+        }
+    }
+}
+#[cfg(target_arch = "x86_64")]
+pub(crate) use avx_sse2_mod::*;
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod sse2_mod {
+    #[cfg(target_arch = "x86")]
+    use core::arch::x86::*;
+
+    #[cfg(target_arch = "x86_64")]
+    use core::arch::x86_64::*;
+    pub(crate) struct Sse2 {}
+
+    impl Sse2 {
+        const F32_WIDTH: usize = 4;
+        #[inline(always)]
+        unsafe fn set1_f32(x: f32) -> __m128 {
+            _mm_set1_ps(x)
+        }
+        #[inline(always)]
+        unsafe fn set1_i32(x: i32) -> __m128i {
+            _mm_set1_epi32(x)
+        }
+
+        #[inline(always)]
+        unsafe fn loadu_f32(ptr: *const f32) -> __m128 {
+            _mm_loadu_ps(ptr)
+        }
+
+        #[inline(always)]
+        unsafe fn and_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_and_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn mul_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_mul_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_i32(a: __m128i, b: __m128i) -> __m128i {
+            _mm_add_epi32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_i32(a: __m128i, b: __m128i) -> __m128i {
+            _mm_sub_epi32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn and_i32(a: __m128i, b: __m128i) -> __m128i {
+            _mm_and_si128(a, b)
+        }
+        #[inline(always)]
+        unsafe fn cvt_i32_f32(a: __m128i) -> __m128 {
+            _mm_cvtepi32_ps(a)
+        }
+        #[inline(always)]
+        unsafe fn cvt_f32_i32(a: __m128) -> __m128i {
+            _mm_cvtps_epi32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_i32(a: __m128i, b: __m128i) -> __m128i {
+            _mm_andnot_si128(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn slli_i32<const IMM8: i32>(a: __m128i) -> __m128i {
+            _mm_slli_epi32(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn cmpeq_i32(a: __m128i, b: __m128i) -> __m128i {
+            _mm_cmpeq_epi32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn cast_i32_f32(a: __m128i) -> __m128 {
+            _mm_castsi128_ps(a)
+        }
+
+        #[inline(always)]
+        unsafe fn fmadd_f32(a: __m128, b: __m128, c: __m128) -> __m128 {
+            let mul = _mm_mul_ps(a, b);
+            _mm_add_ps(mul, c)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_andnot_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_add_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn xor_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_xor_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn storeu_f32(ptr: *mut f32, a: __m128) {
+            _mm_storeu_ps(ptr, a)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_sub_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_f32<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
+            _mm_cmp_ps(a, b, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn mask_mul_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
+            let one = _mm_set1_ps(1.0);
+            let one = _mm_andnot_ps(mask, one);
+            let masked_one = _mm_and_ps(b, mask);
+            let masked_b = _mm_or_ps(masked_one, one);
+            let c = _mm_mul_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn mask_sub_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
+            let masked_b = _mm_and_ps(b, mask);
+            let c = _mm_sub_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn or_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_or_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn mask_add_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
+            let masked_b = _mm_and_ps(b, mask);
+            let c = _mm_add_ps(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn cast_f32_i32(a: __m128) -> __m128i {
+            _mm_castps_si128(a)
+        }
+
+        #[inline(always)]
+        unsafe fn srli_i32<const IMM8: i32>(a: __m128i) -> __m128i {
+            _mm_srli_epi32(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn min_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_min_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn round_f32<const IMM8: i32>(a: __m128) -> __m128 {
+            _mm_round_ps(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn max_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_max_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn div_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_div_ps(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn get_exp_mant_f32(a: __m128) -> (__m128, __m128) {
+            let a_0 = a;
+            let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+            let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
+            let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+            let denorm_mul = Self::set1_f32(134217730.);
+            let denorm_th = Self::set1_f32(1.1754945e-38);
+            let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+            let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
+
+            let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
+
+            /* keep only the fractional part */
+            a = Self::and_f32(a, inv_mant_mask);
+            a = Self::or_f32(a, Self::set1_f32(0.5));
+
+            // this is again another AVX2 instruction
+            imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
+
+            let e = Self::cvt_i32_f32(imm0);
+
+            let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
+            let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::min_f32(e, a_0);
+            let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
+
+            (e, a)
+        }
+    }
+
+    impl_cos!(Sse2, "sse,sse2", vs_cos_sse2);
+    impl_sin!(Sse2, "sse,sse2", vs_sin_sse2);
+    impl_ln!(Sse2, "sse,sse2", vs_ln_sse2);
+    impl_exp!(Sse2, "sse,sse2", vs_exp_sse2, NO_FMA);
+    impl_tanh!(Sse2, "sse,sse2", vs_tanh_sse2);
+}
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(crate) use sse2_mod::*;
+
+#[cfg(target_arch = "x86_64")]
+mod avx512f_mod {
+    use core::arch::asm;
+    pub(crate) unsafe fn vs_ln_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+        const NR: usize = 16;
+        // define constants
+        const LN2F_HI: f32 = 0.693359375;
+        const LN2F_LO: f32 = -2.12194440E-4;
+        const P0LOGF: f32 = -0.5;
+        const P1LOGF: f32 = 3.3333331174E-1;
+        const P2LOGF: f32 = -2.4999993993E-1;
+        const P3LOGF: f32 = 2.0000714765E-1;
+        const P4LOGF: f32 = -1.6666657665E-1;
+        const P5LOGF: f32 = 1.4249322787E-1;
+        const P6LOGF: f32 = -1.250000140846E-1;
+        const P7LOGF: f32 = 1.1676998740E-1;
+        // const P8LOGF: f32 = -1.1514610310E-1;
+        // const P9LOGF: f32 = 7.0376836292E-2;
+
+        let constant_arr = [
+            0.73337,
+            1.5,
+            1.0,
+            -0.58496250072,
+            -1.0,
+            P7LOGF,
+            P6LOGF,
+            P5LOGF,
+            P4LOGF,
+            P3LOGF,
+            P2LOGF,
+            P1LOGF,
+            P0LOGF,
+            LN2F_HI + LN2F_LO,
+            f32::NAN,
+        ];
+
+        let mut i = 0;
+        asm!(
+            "vxorps %zmm0, %zmm0, %zmm0",
+            "vbroadcastss 0({constant_arrx}), %zmm1",
+            "vbroadcastss 4({constant_arrx}), %zmm2",
+            "vbroadcastss 8({constant_arrx}), %zmm3",
+            "vbroadcastss 12({constant_arrx}), %zmm4",
+            "vbroadcastss 16({constant_arrx}), %zmm5",
+
+            "vbroadcastss 20({constant_arrx}), %zmm6",
+            "vbroadcastss 24({constant_arrx}), %zmm7",
+            "vbroadcastss 28({constant_arrx}), %zmm8",
+            "vbroadcastss 32({constant_arrx}), %zmm9",
+            "vbroadcastss 36({constant_arrx}), %zmm10",
+            "vbroadcastss 40({constant_arrx}), %zmm11",
+            "vbroadcastss 44({constant_arrx}), %zmm12",
+            "vbroadcastss 48({constant_arrx}), %zmm13",
+
+            "vbroadcastss 52({constant_arrx}), %zmm14",
+
+            "test {nx:e}, {nx:e}",
+            "je 3f",
+
+            "2:",
+            "vmovups ({ax}), %zmm15",
+            "vcmpltps        %zmm0, %zmm15, %k1",
+            "vgetexpps       %zmm15, %zmm16",
+            "vgetmantps      $2, %zmm15, %zmm15",
+            "vcmplt_oqps     %zmm1, %zmm15, %k2",
+            "vmulps  %zmm2, %zmm15, %zmm15 {{%k2}}",
+            "vaddps  %zmm3, %zmm16, %zmm16",
+            "vaddps  %zmm4, %zmm16, %zmm16 {{%k2}}",
+            "vaddps  %zmm5, %zmm15, %zmm15",
+            "vmovaps %zmm6, %zmm17",
+            "vfmadd213ps     %zmm7, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm8, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm9, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm10, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm11, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm12, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm13, %zmm15, %zmm17",
+            "vfmadd213ps     %zmm3, %zmm15, %zmm17",
+            "vmulps  %zmm17, %zmm15, %zmm15",
+            "vfmadd231ps     %zmm14, %zmm16, %zmm15",
+            "vbroadcastss    56({constant_arrx}), %zmm15 {{%k1}}",
+            "vmovups %zmm15, ({bx})",
+            "add  $64, {ax}",
+            "add  $64, {bx}",
+            "add $16, {ix:e}",
+            "cmp {nx:e}, {ix:e}",
+            "jl 2b",
+
+            "3:",
+            "vzeroupper",
+
+            constant_arrx = in(reg) &constant_arr,
+            ax = inout(reg) a => _,
+            bx = inout(reg) b => _,
+            ix = inout(reg) i => i,
+            nx = inout(reg) n / NR * NR => _,
+            out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
+            out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+            out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
+            out("zmm30") _, out("zmm31") _, out("k1") _, out("k2") _,
+            options(att_syntax)
+        );
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).ln();
+            i += 1;
+        }
+    }
+
+    pub(crate) unsafe fn vs_exp_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+        const NR: usize = 16;
+        // Constants
+        // use asm until avx512f is stabilized
+        const EXP_HI: f32 = 88.3762626647949 * 2.0;
+        const EXP_LO: f32 = -88.3762626647949 * 2.0;
+        const LOG2EF: f32 = 1.44269504088896341;
+        const INV_LOG2EF: f32 = 0.693359375;
+        const CEHPES_EXP_C2: f32 = -2.12194440e-4;
+        const EXP_P0: f32 = 1.9875691500E-4;
+        const EXP_P1: f32 = 1.3981999507E-3;
+        const EXP_P2: f32 = 8.3334519073E-3;
+        const EXP_P3: f32 = 4.1665795894E-2;
+        const EXP_P4: f32 = 1.6666665459E-1;
+        const EXP_P5: f32 = 5.0000001201E-1;
+
+        let constant_arr =
+            [LOG2EF, -CEHPES_EXP_C2 - INV_LOG2EF, EXP_P0, EXP_P1, EXP_P2, EXP_P3, EXP_P4, EXP_P5, 1.0, EXP_HI, EXP_LO];
+        let mut i = 0;
+        asm!(
+            "vbroadcastss ({constant_arrx}), %zmm0",
+            "vbroadcastss 4({constant_arrx}), %zmm1",
+            "vbroadcastss 8({constant_arrx}), %zmm2",
+            "vbroadcastss 12({constant_arrx}), %zmm3",
+            "vbroadcastss 16({constant_arrx}), %zmm4",
+            "vbroadcastss 20({constant_arrx}), %zmm5",
+            "vbroadcastss 24({constant_arrx}), %zmm6",
+            "vbroadcastss 28({constant_arrx}), %zmm7",
+            "vbroadcastss 32({constant_arrx}), %zmm8",
+
+            "vbroadcastss 36({constant_arrx}), %zmm13",
+            "vbroadcastss 40({constant_arrx}), %zmm14",
+
+            "test {nx:e}, {nx:e}",
+            "je 3f",
+
+            "2:",
+            "vmovups ({ax}), %zmm9",
+            // order of input for max and min is important
+            // since it leads to correct NaN propagation
+            "vminps %zmm9, %zmm13, %zmm9",
+            "vmaxps %zmm9, %zmm14, %zmm9",
+            "vmulps  %zmm0, %zmm9, %zmm10",
+            "vrndscaleps     $8, %zmm10, %zmm10",
+            "vfmadd231ps     %zmm1, %zmm10, %zmm9",
+            "vmovaps %zmm2, %zmm11",
+            "vfmadd213ps     %zmm3, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm4, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm5, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm6, %zmm9, %zmm11",
+            "vmulps  %zmm9, %zmm9, %zmm12",
+            "vfmadd213ps     %zmm7, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm9, %zmm12, %zmm11",
+            "vaddps  %zmm8, %zmm11, %zmm9",
+            "vscalefps       %zmm10, %zmm9, %zmm9",
+            "vmovups %zmm9, ({bx})",
+            "add  $64, {ax}",
+            "add  $64, {bx}",
+            "add $16, {ix:e}",
+            "cmp {nx:e}, {ix:e}",
+            "jl 2b",
+
+            "3:",
+            "vzeroupper",
+
+            constant_arrx = in(reg) &constant_arr,
+            ax = inout(reg) a => _,
+            bx = inout(reg) b => _,
+            ix = inout(reg) i => i,
+            nx = inout(reg) n / NR * NR => _,
+            out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
+            out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+            out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
+            out("zmm30") _, out("zmm31") _,
+            options(att_syntax)
+        );
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).exp();
+            i += 1;
+        }
+    }
+
+    pub(crate) unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+        const NR: usize = 16;
+        // Constants
+        // use asm until avx512f is stabilized
+        const EXP_HI: f32 = 88.3762626647949 * 1.0;
+        const EXP_LO: f32 = -88.3762626647949 * 1.0;
+        const LOG2EF: f32 = 1.44269504088896341;
+        const INV_LOG2EF: f32 = 0.693359375;
+        const CEHPES_EXP_C2: f32 = -2.12194440e-4;
+        const EXP_P0: f32 = 1.9875691500E-4;
+        const EXP_P1: f32 = 1.3981999507E-3;
+        const EXP_P2: f32 = 8.3334519073E-3;
+        const EXP_P3: f32 = 4.1665795894E-2;
+        const EXP_P4: f32 = 1.6666665459E-1;
+        const EXP_P5: f32 = 5.0000001201E-1;
+
+        let constant_arr = [
+            LOG2EF,
+            -CEHPES_EXP_C2 - INV_LOG2EF,
+            EXP_P0,
+            EXP_P1,
+            EXP_P2,
+            EXP_P3,
+            EXP_P4,
+            EXP_P5,
+            1.0,
+            EXP_HI,
+            EXP_LO,
+            -1.0,
+        ];
+        let mut i = 0;
+        asm!(
+            "vbroadcastss ({constant_arrx}), %zmm0",
+            "vbroadcastss 4({constant_arrx}), %zmm1",
+            "vbroadcastss 8({constant_arrx}), %zmm2",
+            "vbroadcastss 12({constant_arrx}), %zmm3",
+            "vbroadcastss 16({constant_arrx}), %zmm4",
+            "vbroadcastss 20({constant_arrx}), %zmm5",
+            "vbroadcastss 24({constant_arrx}), %zmm6",
+            "vbroadcastss 28({constant_arrx}), %zmm7",
+            "vbroadcastss 32({constant_arrx}), %zmm8",
+
+            "vbroadcastss 36({constant_arrx}), %zmm13",
+            "vbroadcastss 40({constant_arrx}), %zmm14",
+            "vbroadcastss 44({constant_arrx}), %zmm15",
+
+            "test {nx:e}, {nx:e}",
+            "je 3f",
+
+            "2:",
+            "vmovups ({ax}), %zmm31",
+            // order of input for max and min is important
+            // since it leads to correct NaN propagation
+            "vminps %zmm31, %zmm13, %zmm9",
+            "vmaxps %zmm9, %zmm14, %zmm9",
+            "vmulps  %zmm0, %zmm9, %zmm10",
+            "vrndscaleps     $8, %zmm10, %zmm10",
+            "vfmadd231ps     %zmm1, %zmm10, %zmm9",
+            "vmovaps %zmm2, %zmm11",
+            "vfmadd213ps     %zmm3, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm4, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm5, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm6, %zmm9, %zmm11",
+            "vmulps  %zmm9, %zmm9, %zmm12",
+            "vfmadd213ps     %zmm7, %zmm9, %zmm11",
+            "vfmadd213ps     %zmm9, %zmm12, %zmm11",
+            "vaddps  %zmm8, %zmm11, %zmm9",
+            "vscalefps       %zmm10, %zmm9, %zmm9",
+            "vmulps %zmm9, %zmm9, %zmm9",
+
+            "vmaxps %zmm31, %zmm13, %zmm31",
+
+            "vaddps %zmm9, %zmm15, %zmm16",
+            "vaddps %zmm9, %zmm8, %zmm9",
+            "vdivps %zmm9, %zmm16, %zmm9",
+            "vminps %zmm8, %zmm9, %zmm9",
+            "vmaxps %zmm15, %zmm9, %zmm9",
+
+            "vminps %zmm31, %zmm9, %zmm9",
+            "vmovups %zmm9, ({bx})",
+            "add  $64, {ax}",
+            "add  $64, {bx}",
+            "add $16, {ix:e}",
+            "cmp {nx:e}, {ix:e}",
+            "jl 2b",
+
+            "3:",
+            "vzeroupper",
+
+            constant_arrx = in(reg) &constant_arr,
+            ax = inout(reg) a => _,
+            bx = inout(reg) b => _,
+            ix = inout(reg) i => i,
+            nx = inout(reg) n / NR * NR => _,
+            out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
+            out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
+            out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
+            out("zmm30") _, out("zmm31") _,
+            options(att_syntax)
+        );
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).tanh();
+            i += 1;
+        }
+    }
+
+    pub(crate) unsafe fn vs_sqrt_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
+        const NR: usize = 16;
+        // Constants
+        // use asm until avx512f is stabilized
+        let mut i = 0;
+        asm!(
+            "test {nx:e}, {nx:e}",
+            "je 3f",
+
+            "2:",
+            "vmovups ({ax}), %zmm9",
+            "vsqrtps %zmm9, %zmm9",
+            "vmovups %zmm9, ({bx})",
+            "add  $64, {ax}",
+            "add  $64, {bx}",
+            "add $16, {ix:e}",
+            "cmp {nx:e}, {ix:e}",
+            "jl 2b",
+
+            "3:",
+            "vzeroupper",
+
+            ax = inout(reg) a => _,
+            bx = inout(reg) b => _,
+            ix = inout(reg) i => i,
+            nx = inout(reg) n / NR * NR => _,
+            out("zmm9") _,
+            options(att_syntax)
+        );
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+            i += 1;
+        }
+    }
+
+    pub(crate) unsafe fn vd_sqrt_avx512f_asm(n: usize, a: *const f64, b: *mut f64) {
+        const NR: usize = 8;
+        // Constants
+        // use asm until avx512f is stabilized
+        let mut i = 0;
+        asm!(
+            "test {nx:e}, {nx:e}",
+            "je 3f",
+
+            "2:",
+            "vmovupd ({ax}), %zmm9",
+            "vsqrtpd %zmm9, %zmm9",
+            "vmovupd %zmm9, ({bx})",
+            "add  $64, {ax}",
+            "add  $64, {bx}",
+            "add $16, {ix:e}",
+            "cmp {nx:e}, {ix:e}",
+            "jl 2b",
+
+            "3:",
+            "vzeroupper",
+
+            ax = inout(reg) a => _,
+            bx = inout(reg) b => _,
+            ix = inout(reg) i => i,
+            nx = inout(reg) n / NR * NR => _,
+            out("zmm9") _,
+            options(att_syntax)
+        );
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+            i += 1;
+        }
     }
 }
 
-#[target_feature(enable = "avx")]
-unsafe fn vd_sqrt_avx(n: usize, a: *const f64, b: *mut f64) {
-    const NR: usize = 4;
-    let mut i = 0;
-    while (i + NR) <= n {
-        let x = _mm256_loadu_pd(a.offset(i as isize));
-        let y = _mm256_sqrt_pd(x);
-        _mm256_storeu_pd(b.offset(i as isize), y);
-        i += NR;
-    }
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
-        i += 1;
-    }
-}
-
-struct Avx2Fma {}
-
-impl Avx2Fma {
-    const F32_WIDTH: usize = 8;
-    #[inline(always)]
-    unsafe fn set1_f32(x: f32) -> __m256 {
-        _mm256_set1_ps(x)
-    }
-    #[inline(always)]
-    unsafe fn set1_i32(x: i32) -> __m256i {
-        _mm256_set1_epi32(x)
-    }
-
-    #[inline(always)]
-    unsafe fn loadu_f32(ptr: *const f32) -> __m256 {
-        _mm256_loadu_ps(ptr)
-    }
-
-    #[inline(always)]
-    unsafe fn and_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_and_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_mul_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn add_i32(a: __m256i, b: __m256i) -> __m256i {
-        _mm256_add_epi32(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn and_i32(a: __m256i, b: __m256i) -> __m256i {
-        _mm256_and_si256(a, b)
-    }
-    #[inline(always)]
-    unsafe fn cvt_i32_f32(a: __m256i) -> __m256 {
-        _mm256_cvtepi32_ps(a)
-    }
-    #[inline(always)]
-    unsafe fn cvt_f32_i32(a: __m256) -> __m256i {
-        _mm256_cvtps_epi32(a)
-    }
-
-    #[inline(always)]
-    unsafe fn sub_i32(a: __m256i, b: __m256i) -> __m256i {
-        _mm256_sub_epi32(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn andnot_i32(a: __m256i, b: __m256i) -> __m256i {
-        _mm256_andnot_si256(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn slli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
-        _mm256_slli_epi32(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn cmpeq_i32(a: __m256i, b: __m256i) -> __m256i {
-        _mm256_cmpeq_epi32(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn cast_i32_f32(a: __m256i) -> __m256 {
-        _mm256_castsi256_ps(a)
-    }
-
-    #[inline(always)]
-    unsafe fn fmadd_f32(a: __m256, b: __m256, c: __m256) -> __m256 {
-        _mm256_fmadd_ps(a, b, c)
-    }
-
-    #[inline(always)]
-    unsafe fn andnot_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_andnot_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn add_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_add_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn xor_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_xor_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn storeu_f32(ptr: *mut f32, a: __m256) {
-        _mm256_storeu_ps(ptr, a)
-    }
-
-    #[inline(always)]
-    unsafe fn sub_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_sub_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn cmp_f32<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
-        _mm256_cmp_ps(a, b, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn mask_mul_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
-        let one = _mm256_set1_ps(1.0);
-        let one = _mm256_andnot_ps(mask, one);
-        let masked_one = _mm256_and_ps(b, mask);
-        let masked_b = _mm256_or_ps(masked_one, one);
-        let c = _mm256_mul_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn mask_sub_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
-        let masked_b = _mm256_and_ps(b, mask);
-        let c = _mm256_sub_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn or_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_or_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn mask_add_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
-        let masked_b = _mm256_and_ps(b, mask);
-        let c = _mm256_add_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn cast_f32_i32(a: __m256) -> __m256i {
-        _mm256_castps_si256(a)
-    }
-
-    #[inline(always)]
-    unsafe fn srli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
-        _mm256_srli_epi32(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn min_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_min_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn round_f32<const IMM8: i32>(a: __m256) -> __m256 {
-        _mm256_round_ps(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn max_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_max_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn div_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_div_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
-        let a_0 = a;
-        let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
-        let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
-        let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
-        let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
-        let denorm_mul = Self::set1_f32(134217730.);
-        let denorm_th = Self::set1_f32(1.1754945e-38);
-        let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
-        let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
-
-        let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
-
-        /* keep only the fractional part */
-        a = Self::and_f32(a, inv_mant_mask);
-        a = Self::or_f32(a, Self::set1_f32(0.5));
-
-        // this is again another AVX2 instruction
-        imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
-
-        let e = Self::cvt_i32_f32(imm0);
-
-        let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
-        let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
-        let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
-        let e = Self::min_f32(e, a_0);
-        let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
-
-        (e, a)
-    }
-}
-
-struct AvxSse2 {}
-
-impl AvxSse2 {
-    const F32_WIDTH: usize = 8;
-    #[inline(always)]
-    unsafe fn set1_f32(x: f32) -> __m256 {
-        _mm256_set1_ps(x)
-    }
-    #[inline(always)]
-    unsafe fn set1_i32(x: i32) -> __m256i {
-        _mm256_set1_epi32(x)
-    }
-
-    #[inline(always)]
-    unsafe fn loadu_f32(ptr: *const f32) -> __m256 {
-        _mm256_loadu_ps(ptr)
-    }
-
-    #[inline(always)]
-    unsafe fn and_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_and_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_mul_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn add_i32(a: __m256i, b: __m256i) -> __m256i {
-        // extract second half of a and b
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let b1 = _mm256_extractf128_si256(b, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let b0 = _mm256_castsi256_si128(b);
-        let c0 = _mm_add_epi32(a0, b0);
-        let c1 = _mm_add_epi32(a1, b1);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-
-    #[inline(always)]
-    unsafe fn and_i32(a: __m256i, b: __m256i) -> __m256i {
-        // extract second half of a and b
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let b1 = _mm256_extractf128_si256(b, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let b0 = _mm256_castsi256_si128(b);
-        let c0 = _mm_and_si128(a0, b0);
-        let c1 = _mm_and_si128(a1, b1);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-    #[inline(always)]
-    unsafe fn cvt_i32_f32(a: __m256i) -> __m256 {
-        _mm256_cvtepi32_ps(a)
-    }
-    #[inline(always)]
-    unsafe fn cvt_f32_i32(a: __m256) -> __m256i {
-        _mm256_cvtps_epi32(a)
-    }
-
-    #[inline(always)]
-    unsafe fn sub_i32(a: __m256i, b: __m256i) -> __m256i {
-        // extract second half of a and b
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let b1 = _mm256_extractf128_si256(b, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let b0 = _mm256_castsi256_si128(b);
-        let c0 = _mm_sub_epi32(a0, b0);
-        let c1 = _mm_sub_epi32(a1, b1);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-
-    #[inline(always)]
-    unsafe fn andnot_i32(a: __m256i, b: __m256i) -> __m256i {
-        // extract second half of a and b
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let b1 = _mm256_extractf128_si256(b, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let b0 = _mm256_castsi256_si128(b);
-        let c0 = _mm_andnot_si128(a0, b0);
-        let c1 = _mm_andnot_si128(a1, b1);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-
-    #[inline(always)]
-    unsafe fn slli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
-        // extract second half of a and b
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let c0 = _mm_slli_epi32(a0, IMM8);
-        let c1 = _mm_slli_epi32(a1, IMM8);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-
-    #[inline(always)]
-    unsafe fn cmpeq_i32(a: __m256i, b: __m256i) -> __m256i {
-        // extract second half of a and b
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let b1 = _mm256_extractf128_si256(b, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let b0 = _mm256_castsi256_si128(b);
-        let c0 = _mm_cmpeq_epi32(a0, b0);
-        let c1 = _mm_cmpeq_epi32(a1, b1);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-
-    #[inline(always)]
-    unsafe fn cast_i32_f32(a: __m256i) -> __m256 {
-        _mm256_castsi256_ps(a)
-    }
-
-    #[inline(always)]
-    unsafe fn fmadd_f32(a: __m256, b: __m256, c: __m256) -> __m256 {
-        let mul = _mm256_mul_ps(a, b);
-        _mm256_add_ps(mul, c)
-    }
-
-    #[inline(always)]
-    unsafe fn andnot_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_andnot_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn add_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_add_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn xor_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_xor_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn storeu_f32(ptr: *mut f32, a: __m256) {
-        _mm256_storeu_ps(ptr, a)
-    }
-
-    #[inline(always)]
-    unsafe fn sub_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_sub_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn cmp_f32<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
-        _mm256_cmp_ps(a, b, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn mask_mul_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
-        let one = _mm256_set1_ps(1.0);
-        let one = _mm256_andnot_ps(mask, one);
-        let masked_one = _mm256_and_ps(b, mask);
-        let masked_b = _mm256_or_ps(masked_one, one);
-        let c = _mm256_mul_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn mask_sub_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
-        let masked_b = _mm256_and_ps(b, mask);
-        let c = _mm256_sub_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn or_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_or_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn mask_add_f32(mask: __m256, a: __m256, b: __m256) -> __m256 {
-        let masked_b = _mm256_and_ps(b, mask);
-        let c = _mm256_add_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn cast_f32_i32(a: __m256) -> __m256i {
-        _mm256_castps_si256(a)
-    }
-
-    #[inline(always)]
-    unsafe fn srli_i32<const IMM8: i32>(a: __m256i) -> __m256i {
-        // extract second half of a
-        let a1 = _mm256_extractf128_si256(a, 1);
-        let a0 = _mm256_castsi256_si128(a);
-        let c0 = _mm_srli_epi32(a0, IMM8);
-        let c1 = _mm_srli_epi32(a1, IMM8);
-        _mm256_insertf128_si256(_mm256_castsi128_si256(c0), c1, 1)
-    }
-
-    #[inline(always)]
-    unsafe fn min_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_min_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn round_f32<const IMM8: i32>(a: __m256) -> __m256 {
-        _mm256_round_ps(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn max_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_max_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn div_f32(a: __m256, b: __m256) -> __m256 {
-        _mm256_div_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
-        let a_0 = a;
-        let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
-        let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
-        let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
-        let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
-        let denorm_mul = Self::set1_f32(134217730.);
-        let denorm_th = Self::set1_f32(1.1754945e-38);
-        let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
-        let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
-
-        let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
-
-        /* keep only the fractional part */
-        a = Self::and_f32(a, inv_mant_mask);
-        a = Self::or_f32(a, Self::set1_f32(0.5));
-
-        // this is again another AVX2 instruction
-        imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
-
-        let e = Self::cvt_i32_f32(imm0);
-
-        let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
-        let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
-        let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
-        let e = Self::min_f32(e, a_0);
-        let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
-
-        (e, a)
-    }
-}
-
-struct Sse2 {}
-
-impl Sse2 {
-    const F32_WIDTH: usize = 4;
-    #[inline(always)]
-    unsafe fn set1_f32(x: f32) -> __m128 {
-        _mm_set1_ps(x)
-    }
-    #[inline(always)]
-    unsafe fn set1_i32(x: i32) -> __m128i {
-        _mm_set1_epi32(x)
-    }
-
-    #[inline(always)]
-    unsafe fn loadu_f32(ptr: *const f32) -> __m128 {
-        _mm_loadu_ps(ptr)
-    }
-
-    #[inline(always)]
-    unsafe fn and_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_and_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_mul_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn add_i32(a: __m128i, b: __m128i) -> __m128i {
-        _mm_add_epi32(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn sub_i32(a: __m128i, b: __m128i) -> __m128i {
-        _mm_sub_epi32(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn and_i32(a: __m128i, b: __m128i) -> __m128i {
-        _mm_and_si128(a, b)
-    }
-    #[inline(always)]
-    unsafe fn cvt_i32_f32(a: __m128i) -> __m128 {
-        _mm_cvtepi32_ps(a)
-    }
-    #[inline(always)]
-    unsafe fn cvt_f32_i32(a: __m128) -> __m128i {
-        _mm_cvtps_epi32(a)
-    }
-
-    #[inline(always)]
-    unsafe fn andnot_i32(a: __m128i, b: __m128i) -> __m128i {
-        _mm_andnot_si128(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn slli_i32<const IMM8: i32>(a: __m128i) -> __m128i {
-        _mm_slli_epi32(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn cmpeq_i32(a: __m128i, b: __m128i) -> __m128i {
-        _mm_cmpeq_epi32(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn cast_i32_f32(a: __m128i) -> __m128 {
-        _mm_castsi128_ps(a)
-    }
-
-    #[inline(always)]
-    unsafe fn fmadd_f32(a: __m128, b: __m128, c: __m128) -> __m128 {
-        let mul = _mm_mul_ps(a, b);
-        _mm_add_ps(mul, c)
-    }
-
-    #[inline(always)]
-    unsafe fn andnot_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_andnot_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn add_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_add_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn xor_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_xor_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn storeu_f32(ptr: *mut f32, a: __m128) {
-        _mm_storeu_ps(ptr, a)
-    }
-
-    #[inline(always)]
-    unsafe fn sub_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_sub_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn cmp_f32<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
-        _mm_cmp_ps(a, b, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn mask_mul_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
-        let one = _mm_set1_ps(1.0);
-        let one = _mm_andnot_ps(mask, one);
-        let masked_one = _mm_and_ps(b, mask);
-        let masked_b = _mm_or_ps(masked_one, one);
-        let c = _mm_mul_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn mask_sub_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
-        let masked_b = _mm_and_ps(b, mask);
-        let c = _mm_sub_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn or_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_or_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn mask_add_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
-        let masked_b = _mm_and_ps(b, mask);
-        let c = _mm_add_ps(a, masked_b);
-        c
-    }
-
-    #[inline(always)]
-    unsafe fn cast_f32_i32(a: __m128) -> __m128i {
-        _mm_castps_si128(a)
-    }
-
-    #[inline(always)]
-    unsafe fn srli_i32<const IMM8: i32>(a: __m128i) -> __m128i {
-        _mm_srli_epi32(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn min_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_min_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn round_f32<const IMM8: i32>(a: __m128) -> __m128 {
-        _mm_round_ps(a, IMM8)
-    }
-
-    #[inline(always)]
-    unsafe fn max_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_max_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn div_f32(a: __m128, b: __m128) -> __m128 {
-        _mm_div_ps(a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn get_exp_mant_f32(a: __m128) -> (__m128, __m128) {
-        let a_0 = a;
-        let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
-        let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
-        let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
-        let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
-        let denorm_mul = Self::set1_f32(134217730.);
-        let denorm_th = Self::set1_f32(1.1754945e-38);
-        let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
-        let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
-
-        let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
-
-        /* keep only the fractional part */
-        a = Self::and_f32(a, inv_mant_mask);
-        a = Self::or_f32(a, Self::set1_f32(0.5));
-
-        // this is again another AVX2 instruction
-        imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
-
-        let e = Self::cvt_i32_f32(imm0);
-
-        let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
-        let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
-        let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
-        let e = Self::min_f32(e, a_0);
-        let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
-
-        (e, a)
-    }
-}
-
-unsafe fn vs_ln_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
-    const NR: usize = 16;
-    // define constants
-    const LN2F_HI: f32 = 0.693359375;
-    const LN2F_LO: f32 = -2.12194440E-4;
-    const P0LOGF: f32 = -0.5;
-    const P1LOGF: f32 = 3.3333331174E-1;
-    const P2LOGF: f32 = -2.4999993993E-1;
-    const P3LOGF: f32 = 2.0000714765E-1;
-    const P4LOGF: f32 = -1.6666657665E-1;
-    const P5LOGF: f32 = 1.4249322787E-1;
-    const P6LOGF: f32 = -1.250000140846E-1;
-    const P7LOGF: f32 = 1.1676998740E-1;
-    // const P8LOGF: f32 = -1.1514610310E-1;
-    // const P9LOGF: f32 = 7.0376836292E-2;
-
-    let constant_arr = [
-        0.73337,
-        1.5,
-        1.0,
-        -0.58496250072,
-        -1.0,
-        P7LOGF,
-        P6LOGF,
-        P5LOGF,
-        P4LOGF,
-        P3LOGF,
-        P2LOGF,
-        P1LOGF,
-        P0LOGF,
-        LN2F_HI + LN2F_LO,
-        f32::NAN,
-    ];
-
-    let mut i = 0;
-    asm!(
-        "vxorps %zmm0, %zmm0, %zmm0",
-        "vbroadcastss 0({constant_arrx}), %zmm1",
-        "vbroadcastss 4({constant_arrx}), %zmm2",
-        "vbroadcastss 8({constant_arrx}), %zmm3",
-        "vbroadcastss 12({constant_arrx}), %zmm4",
-        "vbroadcastss 16({constant_arrx}), %zmm5",
-
-        "vbroadcastss 20({constant_arrx}), %zmm6",
-        "vbroadcastss 24({constant_arrx}), %zmm7",
-        "vbroadcastss 28({constant_arrx}), %zmm8",
-        "vbroadcastss 32({constant_arrx}), %zmm9",
-        "vbroadcastss 36({constant_arrx}), %zmm10",
-        "vbroadcastss 40({constant_arrx}), %zmm11",
-        "vbroadcastss 44({constant_arrx}), %zmm12",
-        "vbroadcastss 48({constant_arrx}), %zmm13",
-
-        "vbroadcastss 52({constant_arrx}), %zmm14",
-
-        "test {nx:e}, {nx:e}",
-        "je 3f",
-
-        "2:",
-        "vmovups ({ax}), %zmm15",
-        "vcmpltps        %zmm0, %zmm15, %k1",
-        "vgetexpps       %zmm15, %zmm16",
-        "vgetmantps      $2, %zmm15, %zmm15",
-        "vcmplt_oqps     %zmm1, %zmm15, %k2",
-        "vmulps  %zmm2, %zmm15, %zmm15 {{%k2}}",
-        "vaddps  %zmm3, %zmm16, %zmm16",
-        "vaddps  %zmm4, %zmm16, %zmm16 {{%k2}}",
-        "vaddps  %zmm5, %zmm15, %zmm15",
-        "vmovaps %zmm6, %zmm17",
-        "vfmadd213ps     %zmm7, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm8, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm9, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm10, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm11, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm12, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm13, %zmm15, %zmm17",
-        "vfmadd213ps     %zmm3, %zmm15, %zmm17",
-        "vmulps  %zmm17, %zmm15, %zmm15",
-        "vfmadd231ps     %zmm14, %zmm16, %zmm15",
-        "vbroadcastss    56({constant_arrx}), %zmm15 {{%k1}}",
-        "vmovups %zmm15, ({bx})",
-        "add  $64, {ax}",
-        "add  $64, {bx}",
-        "add $16, {ix:e}",
-        "cmp {nx:e}, {ix:e}",
-        "jl 2b",
-
-        "3:",
-        "vzeroupper",
-
-        constant_arrx = in(reg) &constant_arr,
-        ax = inout(reg) a => _,
-        bx = inout(reg) b => _,
-        ix = inout(reg) i => i,
-        nx = inout(reg) n / NR * NR => _,
-        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
-        out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
-        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
-        out("zmm30") _, out("zmm31") _, out("k1") _, out("k2") _,
-        options(att_syntax)
-    );
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).ln();
-        i += 1;
-    }
-}
-
-unsafe fn vs_exp_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
-    const NR: usize = 16;
-    // Constants
-    // use asm until avx512f is stabilized
-    const EXP_HI: f32 = 88.3762626647949 * 2.0;
-    const EXP_LO: f32 = -88.3762626647949 * 2.0;
-    const LOG2EF: f32 = 1.44269504088896341;
-    const INV_LOG2EF: f32 = 0.693359375;
-    const CEHPES_EXP_C2: f32 = -2.12194440e-4;
-    const EXP_P0: f32 = 1.9875691500E-4;
-    const EXP_P1: f32 = 1.3981999507E-3;
-    const EXP_P2: f32 = 8.3334519073E-3;
-    const EXP_P3: f32 = 4.1665795894E-2;
-    const EXP_P4: f32 = 1.6666665459E-1;
-    const EXP_P5: f32 = 5.0000001201E-1;
-
-    let constant_arr =
-        [LOG2EF, -CEHPES_EXP_C2 - INV_LOG2EF, EXP_P0, EXP_P1, EXP_P2, EXP_P3, EXP_P4, EXP_P5, 1.0, EXP_HI, EXP_LO];
-    let mut i = 0;
-    asm!(
-        "vbroadcastss ({constant_arrx}), %zmm0",
-        "vbroadcastss 4({constant_arrx}), %zmm1",
-        "vbroadcastss 8({constant_arrx}), %zmm2",
-        "vbroadcastss 12({constant_arrx}), %zmm3",
-        "vbroadcastss 16({constant_arrx}), %zmm4",
-        "vbroadcastss 20({constant_arrx}), %zmm5",
-        "vbroadcastss 24({constant_arrx}), %zmm6",
-        "vbroadcastss 28({constant_arrx}), %zmm7",
-        "vbroadcastss 32({constant_arrx}), %zmm8",
-
-        "vbroadcastss 36({constant_arrx}), %zmm13",
-        "vbroadcastss 40({constant_arrx}), %zmm14",
-
-        "test {nx:e}, {nx:e}",
-        "je 3f",
-
-        "2:",
-        "vmovups ({ax}), %zmm9",
-        // order of input for max and min is important
-        // since it leads to correct NaN propagation
-        "vminps %zmm9, %zmm13, %zmm9",
-        "vmaxps %zmm9, %zmm14, %zmm9",
-        "vmulps  %zmm0, %zmm9, %zmm10",
-        "vrndscaleps     $8, %zmm10, %zmm10",
-        "vfmadd231ps     %zmm1, %zmm10, %zmm9",
-        "vmovaps %zmm2, %zmm11",
-        "vfmadd213ps     %zmm3, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm4, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm5, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm6, %zmm9, %zmm11",
-        "vmulps  %zmm9, %zmm9, %zmm12",
-        "vfmadd213ps     %zmm7, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm9, %zmm12, %zmm11",
-        "vaddps  %zmm8, %zmm11, %zmm9",
-        "vscalefps       %zmm10, %zmm9, %zmm9",
-        "vmovups %zmm9, ({bx})",
-        "add  $64, {ax}",
-        "add  $64, {bx}",
-        "add $16, {ix:e}",
-        "cmp {nx:e}, {ix:e}",
-        "jl 2b",
-
-        "3:",
-        "vzeroupper",
-
-        constant_arrx = in(reg) &constant_arr,
-        ax = inout(reg) a => _,
-        bx = inout(reg) b => _,
-        ix = inout(reg) i => i,
-        nx = inout(reg) n / NR * NR => _,
-        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
-        out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
-        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
-        out("zmm30") _, out("zmm31") _,
-        options(att_syntax)
-    );
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).exp();
-        i += 1;
-    }
-}
-
-unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
-    const NR: usize = 16;
-    // Constants
-    // use asm until avx512f is stabilized
-    const EXP_HI: f32 = 88.3762626647949 * 1.0;
-    const EXP_LO: f32 = -88.3762626647949 * 1.0;
-    const LOG2EF: f32 = 1.44269504088896341;
-    const INV_LOG2EF: f32 = 0.693359375;
-    const CEHPES_EXP_C2: f32 = -2.12194440e-4;
-    const EXP_P0: f32 = 1.9875691500E-4;
-    const EXP_P1: f32 = 1.3981999507E-3;
-    const EXP_P2: f32 = 8.3334519073E-3;
-    const EXP_P3: f32 = 4.1665795894E-2;
-    const EXP_P4: f32 = 1.6666665459E-1;
-    const EXP_P5: f32 = 5.0000001201E-1;
-
-    let constant_arr = [
-        LOG2EF,
-        -CEHPES_EXP_C2 - INV_LOG2EF,
-        EXP_P0,
-        EXP_P1,
-        EXP_P2,
-        EXP_P3,
-        EXP_P4,
-        EXP_P5,
-        1.0,
-        EXP_HI,
-        EXP_LO,
-        -1.0,
-    ];
-    let mut i = 0;
-    asm!(
-        "vbroadcastss ({constant_arrx}), %zmm0",
-        "vbroadcastss 4({constant_arrx}), %zmm1",
-        "vbroadcastss 8({constant_arrx}), %zmm2",
-        "vbroadcastss 12({constant_arrx}), %zmm3",
-        "vbroadcastss 16({constant_arrx}), %zmm4",
-        "vbroadcastss 20({constant_arrx}), %zmm5",
-        "vbroadcastss 24({constant_arrx}), %zmm6",
-        "vbroadcastss 28({constant_arrx}), %zmm7",
-        "vbroadcastss 32({constant_arrx}), %zmm8",
-
-        "vbroadcastss 36({constant_arrx}), %zmm13",
-        "vbroadcastss 40({constant_arrx}), %zmm14",
-        "vbroadcastss 44({constant_arrx}), %zmm15",
-
-        "test {nx:e}, {nx:e}",
-        "je 3f",
-
-        "2:",
-        "vmovups ({ax}), %zmm31",
-        // order of input for max and min is important
-        // since it leads to correct NaN propagation
-        "vminps %zmm31, %zmm13, %zmm9",
-        "vmaxps %zmm9, %zmm14, %zmm9",
-        "vmulps  %zmm0, %zmm9, %zmm10",
-        "vrndscaleps     $8, %zmm10, %zmm10",
-        "vfmadd231ps     %zmm1, %zmm10, %zmm9",
-        "vmovaps %zmm2, %zmm11",
-        "vfmadd213ps     %zmm3, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm4, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm5, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm6, %zmm9, %zmm11",
-        "vmulps  %zmm9, %zmm9, %zmm12",
-        "vfmadd213ps     %zmm7, %zmm9, %zmm11",
-        "vfmadd213ps     %zmm9, %zmm12, %zmm11",
-        "vaddps  %zmm8, %zmm11, %zmm9",
-        "vscalefps       %zmm10, %zmm9, %zmm9",
-        "vmulps %zmm9, %zmm9, %zmm9",
-
-        "vmaxps %zmm31, %zmm13, %zmm31",
-
-        "vaddps %zmm9, %zmm15, %zmm16",
-        "vaddps %zmm9, %zmm8, %zmm9",
-        "vdivps %zmm9, %zmm16, %zmm9",
-        "vminps %zmm8, %zmm9, %zmm9",
-        "vmaxps %zmm15, %zmm9, %zmm9",
-
-        "vminps %zmm31, %zmm9, %zmm9",
-        "vmovups %zmm9, ({bx})",
-        "add  $64, {ax}",
-        "add  $64, {bx}",
-        "add $16, {ix:e}",
-        "cmp {nx:e}, {ix:e}",
-        "jl 2b",
-
-        "3:",
-        "vzeroupper",
-
-        constant_arrx = in(reg) &constant_arr,
-        ax = inout(reg) a => _,
-        bx = inout(reg) b => _,
-        ix = inout(reg) i => i,
-        nx = inout(reg) n / NR * NR => _,
-        out("zmm0") _, out("zmm1") _, out("zmm2") _, out("zmm3") _, out("zmm4") _, out("zmm5") _, out("zmm6") _, out("zmm7") _, out("zmm8") _, out("zmm9") _,
-        out("zmm10") _, out("zmm11") _, out("zmm12") _, out("zmm13") _, out("zmm14") _, out("zmm15") _, out("zmm16") _, out("zmm17") _, out("zmm18") _, out("zmm19") _,
-        out("zmm20") _, out("zmm21") _, out("zmm22") _, out("zmm23") _, out("zmm24") _, out("zmm25") _, out("zmm26") _, out("zmm27") _, out("zmm28") _, out("zmm29") _,
-        out("zmm30") _, out("zmm31") _,
-        options(att_syntax)
-    );
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).tanh();
-        i += 1;
-    }
-}
-
-unsafe fn vs_sqrt_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
-    const NR: usize = 16;
-    // Constants
-    // use asm until avx512f is stabilized
-    let mut i = 0;
-    asm!(
-        "test {nx:e}, {nx:e}",
-        "je 3f",
-
-        "2:",
-        "vmovups ({ax}), %zmm9",
-        "vsqrtps %zmm9, %zmm9",
-        "vmovups %zmm9, ({bx})",
-        "add  $64, {ax}",
-        "add  $64, {bx}",
-        "add $16, {ix:e}",
-        "cmp {nx:e}, {ix:e}",
-        "jl 2b",
-
-        "3:",
-        "vzeroupper",
-
-        ax = inout(reg) a => _,
-        bx = inout(reg) b => _,
-        ix = inout(reg) i => i,
-        nx = inout(reg) n / NR * NR => _,
-        out("zmm9") _,
-        options(att_syntax)
-    );
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
-        i += 1;
-    }
-}
-
-unsafe fn vd_sqrt_avx512f_asm(n: usize, a: *const f64, b: *mut f64) {
-    const NR: usize = 8;
-    // Constants
-    // use asm until avx512f is stabilized
-    let mut i = 0;
-    asm!(
-        "test {nx:e}, {nx:e}",
-        "je 3f",
-
-        "2:",
-        "vmovupd ({ax}), %zmm9",
-        "vsqrtpd %zmm9, %zmm9",
-        "vmovupd %zmm9, ({bx})",
-        "add  $64, {ax}",
-        "add  $64, {bx}",
-        "add $16, {ix:e}",
-        "cmp {nx:e}, {ix:e}",
-        "jl 2b",
-
-        "3:",
-        "vzeroupper",
-
-        ax = inout(reg) a => _,
-        bx = inout(reg) b => _,
-        ix = inout(reg) i => i,
-        nx = inout(reg) n / NR * NR => _,
-        out("zmm9") _,
-        options(att_syntax)
-    );
-    while i < n {
-        *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
-        i += 1;
-    }
-}
+#[cfg(target_arch = "x86_64")]
+pub(crate) use avx512f_mod::*;
 
 macro_rules! impl_fallback {
     ($name:ident, $n:ident, $t:ty) => {
