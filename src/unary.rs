@@ -70,6 +70,7 @@ impl_unary!(
     RUNTIME_HW_CONFIG.avx512f => vs_exp_avx512f_asm,
     RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_exp_avx2_fma,
     RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_exp_avx_sse2,
+    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_exp_sse2,
 );
 
 impl_unary!(vd_ln, dispatch_vd_ln, f64, f64, vd_ln_fallback,);
@@ -79,6 +80,7 @@ impl_unary!(
     RUNTIME_HW_CONFIG.avx512f => vs_ln_avx512f_asm,
     RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_ln_avx2_fma,
     RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_ln_avx_sse2,
+    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_ln_sse2,
 );
 
 impl_unary!(vd_tanh, dispatch_vd_tanh, f64, f64, vd_tanh_fallback,);
@@ -89,6 +91,7 @@ impl_unary!(
     RUNTIME_HW_CONFIG.avx512f => vs_tanh_avx512f_asm,
     RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_tanh_avx2_fma,
     RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_tanh_avx_sse2,
+    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_tanh_sse2,
 );
 
 impl_unary!(
@@ -110,6 +113,7 @@ impl_unary!(
     vs_sin_fallback,
     RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_sin_avx2_fma,
     RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_sin_avx_sse2,
+    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_sin_sse2,
 );
 
 impl_unary!(vd_cos, dispatch_vd_cos, f64, f64, vd_cos_fallback,);
@@ -118,6 +122,7 @@ impl_unary!(
     vs_cos_fallback,
     RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => vs_cos_avx2_fma,
     RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_cos_avx_sse2,
+    RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_cos_sse2,
 );
 
 macro_rules! impl_cos {
@@ -125,7 +130,6 @@ macro_rules! impl_cos {
         impl $simd {
             #[target_feature(enable = $features)]
             unsafe fn vs_cos(n: usize, a: *const f32, b: *mut f32) {
-                const NR: usize = 8;
                 const DP1: f32 = -0.78515625;
                 const DP2: f32 = -2.4187564849853515625e-4;
                 const DP3: f32 = -3.77489497744594108e-8;
@@ -162,11 +166,11 @@ macro_rules! impl_cos {
                 let inv_sign_mask = Self::cast_i32_f32(inv_sign_mask);
 
                 let mut i = 0;
-                while (i + NR) <= n {
+                while (i + Self::F32_WIDTH) <= n {
                     let x = Self::loadu_f32(a.offset(i as isize));
                     let x = Self::and_f32(x, inv_sign_mask);
                     let mut y = Self::mul_f32(x, fopi);
-                    let mut imm2 = _mm256_cvttps_epi32(y);
+                    let mut imm2 = Self::cvt_f32_i32(y);
                     imm2 = Self::add_i32(imm2, Self::set1_i32(1));
                     imm2 = Self::and_i32(imm2, Self::set1_i32(!1));
                     y = Self::cvt_i32_f32(imm2);
@@ -196,7 +200,7 @@ macro_rules! impl_cos {
                     let y = Self::add_f32(y, y2);
                     let y = Self::xor_f32(y, sign_bit);
                     Self::storeu_f32(b.offset(i as isize), y);
-                    i += NR;
+                    i += Self::F32_WIDTH;
                 }
                 while i < n {
                     *b.offset(i as isize) = (*a.offset(i as isize)).cos();
@@ -216,7 +220,6 @@ macro_rules! impl_sin {
         impl $simd {
             #[target_feature(enable = $features)]
             unsafe fn vs_sin(n: usize, a: *const f32, b: *mut f32) {
-                const NR: usize = 8;
                 // define constants
 
                 const DP1: f32 = -0.78515625;
@@ -257,7 +260,7 @@ macro_rules! impl_sin {
                 let inv_sign_mask = Self::cast_i32_f32(inv_sign_mask);
 
                 let mut i = 0;
-                while (i + NR) <= n {
+                while (i + Self::F32_WIDTH) <= n {
                     let x = Self::loadu_f32(a.offset(i as isize));
                     let mut sign_bit = x;
                     let x = Self::and_f32(x, inv_sign_mask);
@@ -268,7 +271,7 @@ macro_rules! impl_sin {
                     let mut y = Self::mul_f32(x, fopi);
 
                     // store the integer part of y in mm0
-                    let mut imm2 = _mm256_cvttps_epi32(y);
+                    let mut imm2 = Self::cvt_f32_i32(y);
                     // j=(j+1) & (~1) (see the cephes sources)
                     // another two AVX2 instruction
                     imm2 = Self::add_i32(imm2, Self::set1_i32(1));
@@ -316,7 +319,7 @@ macro_rules! impl_sin {
                     let y = Self::xor_f32(y, sign_bit);
 
                     Self::storeu_f32(b.offset(i as isize), y);
-                    i += NR;
+                    i += Self::F32_WIDTH;
                 }
                 while i < n {
                     *b.offset(i as isize) = (*a.offset(i as isize)).sin();
@@ -336,7 +339,6 @@ macro_rules! impl_ln {
         impl $simd {
             #[target_feature(enable = $features)]
             unsafe fn vs_ln(n: usize, a: *const f32, b: *mut f32) {
-                const NR: usize = 8;
                 // define constants
                 const LN2F_HI: f32 = 0.693359375;
                 const LN2F_LO: f32 = -2.12194440E-4;
@@ -370,7 +372,7 @@ macro_rules! impl_ln {
 
                 // ops name always end with _f32 not _ps
                 let mut i = 0;
-                while (i + NR) <= n {
+                while (i + Self::F32_WIDTH) <= n {
                     let x = Self::loadu_f32(a.offset(i as isize));
 
                     let (mut exp, mut x) = Self::get_exp_mant_f32(x);
@@ -397,7 +399,7 @@ macro_rules! impl_ln {
                     let r = Self::fmadd_f32(ln2f_hi, exp, y);
 
                     Self::storeu_f32(b.offset(i as isize), r);
-                    i += NR;
+                    i += Self::F32_WIDTH;
                 }
 
                 while i < n {
@@ -418,7 +420,6 @@ macro_rules! impl_exp {
         impl $simd {
             #[target_feature(enable = $features)]
             unsafe fn vs_exp(n: usize, a: *const f32, b: *mut f32) {
-                const NR: usize = 8;
                 // define constants
                 const EXP_HI: f32 = 88.7228391117 * 1.0;
                 const EXP_LO: f32 = -88.7228391117 * 1.0;
@@ -450,7 +451,7 @@ macro_rules! impl_exp {
                 let inv_c2 = Self::set1_f32(-INV_LOG2EF);
 
                 let mut i = 0;
-                while (i + NR) <= n {
+                while (i + Self::F32_WIDTH) <= n {
                     let x = Self::loadu_f32(a.offset(i as isize));
 
                     // Clamp x
@@ -487,7 +488,7 @@ macro_rules! impl_exp {
                     // Final result
                     let r = Self::mul_f32(y, pow2n);
                     Self::storeu_f32(b.offset(i as isize), r);
-                    i += NR;
+                    i += Self::F32_WIDTH;
                 }
                 while i < n {
                     *b.offset(i as isize) = (*a.offset(i as isize)).exp();
@@ -504,7 +505,6 @@ macro_rules! impl_exp {
         impl $simd {
             #[target_feature(enable = $features)]
             unsafe fn vs_exp(n: usize, a: *const f32, b: *mut f32) {
-                const NR: usize = 8;
                 // define constants
                 const EXP_HI: f32 = 88.7228391117 * 1.0;
                 const EXP_LO: f32 = -88.7228391117 * 1.0;
@@ -538,7 +538,7 @@ macro_rules! impl_exp {
                 let l2_l = Self::set1_f32(L2_L);
 
                 let mut i = 0;
-                while (i + NR) <= n {
+                while (i + Self::F32_WIDTH) <= n {
                     let x = Self::loadu_f32(a.offset(i as isize));
 
                     // Clamp x
@@ -576,7 +576,7 @@ macro_rules! impl_exp {
                     // Final result
                     let r = Self::mul_f32(y, pow2n);
                     Self::storeu_f32(b.offset(i as isize), r);
-                    i += NR;
+                    i += Self::F32_WIDTH;
                 }
                 while i < n {
                     *b.offset(i as isize) = (*a.offset(i as isize)).exp();
@@ -596,7 +596,6 @@ macro_rules! impl_tanh {
         impl $simd {
             #[target_feature(enable = $features)]
             unsafe fn vs_tanh(n: usize, a: *const f32, b: *mut f32) {
-                const NR: usize = 8;
                 // define constants
                 const EXP_HI: f32 = 88.7228391117 * 1.0;
                 const EXP_LO: f32 = -88.7228391117 * 1.0;
@@ -630,7 +629,7 @@ macro_rules! impl_tanh {
                 let e_sqrt = Self::set1_f32(1.6487212707);
 
                 let mut i = 0;
-                while (i + NR) <= n {
+                while (i + Self::F32_WIDTH) <= n {
                     let x = Self::loadu_f32(a.offset(i as isize));
                     let x0 = x;
                     let x0 = Self::max_f32(exp_hi, x0);
@@ -669,7 +668,7 @@ macro_rules! impl_tanh {
                     r = Self::min_f32(r, x0);
 
                     Self::storeu_f32(b.offset(i as isize), r);
-                    i += NR;
+                    i += Self::F32_WIDTH;
                 }
                 while i < n {
                     *b.offset(i as isize) = (*a.offset(i as isize)).tanh();
@@ -695,6 +694,12 @@ impl_sin!(AvxSse2, "avx,sse2", vs_sin_avx_sse2);
 impl_ln!(AvxSse2, "avx,sse2", vs_ln_avx_sse2);
 impl_exp!(AvxSse2, "avx,sse2", vs_exp_avx_sse2, NO_FMA);
 impl_tanh!(AvxSse2, "avx,sse2", vs_tanh_avx_sse2);
+
+impl_cos!(Sse2, "sse,sse2", vs_cos_sse2);
+impl_sin!(Sse2, "sse,sse2", vs_sin_sse2);
+impl_ln!(Sse2, "sse,sse2", vs_ln_sse2);
+impl_exp!(Sse2, "sse,sse2", vs_exp_sse2, NO_FMA);
+impl_tanh!(Sse2, "sse,sse2", vs_tanh_sse2);
 
 #[target_feature(enable = "avx")]
 unsafe fn vs_sqrt_avx(n: usize, a: *const f32, b: *mut f32) {
@@ -731,6 +736,7 @@ unsafe fn vd_sqrt_avx(n: usize, a: *const f64, b: *mut f64) {
 struct Avx2Fma {}
 
 impl Avx2Fma {
+    const F32_WIDTH: usize = 8;
     #[inline(always)]
     unsafe fn set1_f32(x: f32) -> __m256 {
         _mm256_set1_ps(x)
@@ -928,6 +934,7 @@ impl Avx2Fma {
 struct AvxSse2 {}
 
 impl AvxSse2 {
+    const F32_WIDTH: usize = 8;
     #[inline(always)]
     unsafe fn set1_f32(x: f32) -> __m256 {
         _mm256_set1_ps(x)
@@ -1137,6 +1144,205 @@ impl AvxSse2 {
 
     #[inline(always)]
     unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
+        let a_0 = a;
+        let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
+        let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+        let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
+        let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+        let denorm_mul = Self::set1_f32(134217730.);
+        let denorm_th = Self::set1_f32(1.1754945e-38);
+        let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+        let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
+
+        let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
+
+        /* keep only the fractional part */
+        a = Self::and_f32(a, inv_mant_mask);
+        a = Self::or_f32(a, Self::set1_f32(0.5));
+
+        // this is again another AVX2 instruction
+        imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
+
+        let e = Self::cvt_i32_f32(imm0);
+
+        let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
+        let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
+        let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
+        let e = Self::min_f32(e, a_0);
+        let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
+
+        (e, a)
+    }
+}
+
+struct Sse2 {}
+
+impl Sse2 {
+    const F32_WIDTH: usize = 4;
+    #[inline(always)]
+    unsafe fn set1_f32(x: f32) -> __m128 {
+        _mm_set1_ps(x)
+    }
+    #[inline(always)]
+    unsafe fn set1_i32(x: i32) -> __m128i {
+        _mm_set1_epi32(x)
+    }
+
+    #[inline(always)]
+    unsafe fn loadu_f32(ptr: *const f32) -> __m128 {
+        _mm_loadu_ps(ptr)
+    }
+
+    #[inline(always)]
+    unsafe fn and_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_and_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_mul_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn add_i32(a: __m128i, b: __m128i) -> __m128i {
+        _mm_add_epi32(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn sub_i32(a: __m128i, b: __m128i) -> __m128i {
+        _mm_sub_epi32(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn and_i32(a: __m128i, b: __m128i) -> __m128i {
+        _mm_and_si128(a, b)
+    }
+    #[inline(always)]
+    unsafe fn cvt_i32_f32(a: __m128i) -> __m128 {
+        _mm_cvtepi32_ps(a)
+    }
+    #[inline(always)]
+    unsafe fn cvt_f32_i32(a: __m128) -> __m128i {
+        _mm_cvtps_epi32(a)
+    }
+
+    #[inline(always)]
+    unsafe fn andnot_i32(a: __m128i, b: __m128i) -> __m128i {
+        _mm_andnot_si128(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn slli_i32<const IMM8: i32>(a: __m128i) -> __m128i {
+        _mm_slli_epi32(a, IMM8)
+    }
+
+    #[inline(always)]
+    unsafe fn cmpeq_i32(a: __m128i, b: __m128i) -> __m128i {
+        _mm_cmpeq_epi32(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn cast_i32_f32(a: __m128i) -> __m128 {
+        _mm_castsi128_ps(a)
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd_f32(a: __m128, b: __m128, c: __m128) -> __m128 {
+        let mul = _mm_mul_ps(a, b);
+        _mm_add_ps(mul, c)
+    }
+
+    #[inline(always)]
+    unsafe fn andnot_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_andnot_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn add_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_add_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn xor_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_xor_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn storeu_f32(ptr: *mut f32, a: __m128) {
+        _mm_storeu_ps(ptr, a)
+    }
+
+    #[inline(always)]
+    unsafe fn sub_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_sub_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn cmp_f32<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
+        _mm_cmp_ps(a, b, IMM8)
+    }
+
+    #[inline(always)]
+    unsafe fn mask_mul_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
+        let one = _mm_set1_ps(1.0);
+        let one = _mm_andnot_ps(mask, one);
+        let masked_one = _mm_and_ps(b, mask);
+        let masked_b = _mm_or_ps(masked_one, one);
+        let c = _mm_mul_ps(a, masked_b);
+        c
+    }
+
+    #[inline(always)]
+    unsafe fn mask_sub_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
+        let masked_b = _mm_and_ps(b, mask);
+        let c = _mm_sub_ps(a, masked_b);
+        c
+    }
+
+    #[inline(always)]
+    unsafe fn or_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_or_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn mask_add_f32(mask: __m128, a: __m128, b: __m128) -> __m128 {
+        let masked_b = _mm_and_ps(b, mask);
+        let c = _mm_add_ps(a, masked_b);
+        c
+    }
+
+    #[inline(always)]
+    unsafe fn cast_f32_i32(a: __m128) -> __m128i {
+        _mm_castps_si128(a)
+    }
+
+    #[inline(always)]
+    unsafe fn srli_i32<const IMM8: i32>(a: __m128i) -> __m128i {
+        _mm_srli_epi32(a, IMM8)
+    }
+
+    #[inline(always)]
+    unsafe fn min_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_min_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn round_f32<const IMM8: i32>(a: __m128) -> __m128 {
+        _mm_round_ps(a, IMM8)
+    }
+
+    #[inline(always)]
+    unsafe fn max_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_max_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn div_f32(a: __m128, b: __m128) -> __m128 {
+        _mm_div_ps(a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn get_exp_mant_f32(a: __m128) -> (__m128, __m128) {
         let a_0 = a;
         let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
         let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
