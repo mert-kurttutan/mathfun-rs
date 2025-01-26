@@ -312,7 +312,7 @@ macro_rules! impl_ln {
 
                     let (mut exp, mut x) = Self::get_exp_mant_f32(x);
 
-                    let mantissa_mask = Self::cmp_f32::<_CMP_LT_OQ>(x, mantissa_th);
+                    let mantissa_mask = Self::cmp_lt_f32(x, mantissa_th);
                     // masked doubling only for mantissa < mantissa_th (by adding to itself)
                     x = Self::mask_mul_f32(mantissa_mask, x, onehalf);
                     exp = Self::add_f32(exp, one);
@@ -396,7 +396,7 @@ macro_rules! impl_exp {
                     // Compute fx = floor(x * log2ef + 0.5)
                     let mut fx = Self::mul_f32(x, log2ef);
                     // use to zero rounding since nearest int is problematic for near overflow and underflowing values
-                    fx = Self::round_f32::<{ _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC }>(fx);
+                    fx = Self::floor_f32(fx);
                     // to prevent denormalized values
                     fx = Self::max_f32(fx, min_exponent);
 
@@ -483,7 +483,7 @@ macro_rules! impl_exp {
                     // Compute fx = floor(x * log2ef + 0.5)
                     let mut fx = Self::mul_f32(x, log2ef);
                     // use to zero rounding since nearest int is problematic for near overflow and underflowing values
-                    fx = Self::round_f32::<{ _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC }>(fx);
+                    fx = Self::floor_f32(fx);
                     // to prevent denormalized values
                     fx = Self::max_f32(fx, min_exponent);
 
@@ -572,7 +572,7 @@ macro_rules! impl_tanh {
                     let x = Self::max_f32(exp_lo, x);
 
                     let fx = Self::mul_f32(x, log2ef);
-                    let fx = Self::round_f32::<{ _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC }>(fx);
+                    let fx = Self::floor_f32(fx);
                     let fx = Self::max_f32(fx, min_exponent);
 
                     let x = Self::fmadd_f32(fx, inv_c2, x);
@@ -628,6 +628,7 @@ impl_unary!(
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_exp_avx_sse2,
     "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_exp_sse2,
     "x86" | RUNTIME_HW_CONFIG.sse => vs_exp_sse2,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vs_exp_neon,
 );
 
 impl_unary!(vd_ln, dispatch_vd_ln, f64, f64, vd_ln_fallback,);
@@ -639,6 +640,7 @@ impl_unary!(
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_ln_avx_sse2,
     "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_ln_sse2,
     "x86" | RUNTIME_HW_CONFIG.sse => vs_ln_sse2,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vs_ln_neon,
 );
 
 impl_unary!(vd_tanh, dispatch_vd_tanh, f64, f64, vd_tanh_fallback,);
@@ -651,6 +653,7 @@ impl_unary!(
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_tanh_avx_sse2,
     "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_tanh_sse2,
     "x86" | RUNTIME_HW_CONFIG.sse => vs_tanh_sse2,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vs_tanh_neon,
 );
 
 impl_unary!(
@@ -658,12 +661,14 @@ impl_unary!(
     vd_sqrt_fallback,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => vd_sqrt_avx512f_asm,
     "x86_64" | RUNTIME_HW_CONFIG.avx => vd_sqrt_avx,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vd_sqrt_neon,
 );
 impl_unary!(
     vs_sqrt, dispatch_vs_sqrt, f32, f32,
     vs_sqrt_fallback,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => vs_sqrt_avx512f_asm,
     "x86_64" | RUNTIME_HW_CONFIG.avx => vs_sqrt_avx,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vs_sqrt_neon,
 );
 
 impl_unary!(vd_sin, dispatch_vd_sin, f64, f64, vd_sin_fallback,);
@@ -674,6 +679,7 @@ impl_unary!(
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_sin_avx_sse2,
     "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_sin_sse2,
     "x86" | RUNTIME_HW_CONFIG.sse => vs_sin_sse2,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vs_sin_neon,
 );
 
 impl_unary!(vd_cos, dispatch_vd_cos, f64, f64, vd_cos_fallback,);
@@ -684,6 +690,7 @@ impl_unary!(
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => vs_cos_avx_sse2,
     "x86_64" | RUNTIME_HW_CONFIG.sse2 && RUNTIME_HW_CONFIG.sse => vs_cos_sse2,
     "x86" | RUNTIME_HW_CONFIG.sse => vs_cos_sse2,
+    "aarch64" | RUNTIME_HW_CONFIG.neon => vs_cos_neon,
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -791,8 +798,13 @@ mod avx2_fma_mod {
         }
 
         #[inline(always)]
-        unsafe fn cmp_f32<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
-            _mm256_cmp_ps(a, b, IMM8)
+        unsafe fn cmp_eq_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_cmp_ps(a, b, _CMP_EQ_OS)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_lt_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_cmp_ps(a, b, _CMP_LT_OS)
         }
 
         #[inline(always)]
@@ -840,8 +852,8 @@ mod avx2_fma_mod {
         }
 
         #[inline(always)]
-        unsafe fn round_f32<const IMM8: i32>(a: __m256) -> __m256 {
-            _mm256_round_ps(a, IMM8)
+        unsafe fn floor_f32(a: __m256) -> __m256 {
+            _mm256_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)
         }
 
         #[inline(always)]
@@ -857,13 +869,13 @@ mod avx2_fma_mod {
         #[inline(always)]
         unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
             let a_0 = a;
-            let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
-            let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+            let zero_mask = Self::cmp_eq_f32(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_lt_f32(a, Self::set1_f32(0.0));
             let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
-            let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+            let inf_mask = Self::cmp_eq_f32(a, Self::set1_f32(f32::INFINITY));
             let denorm_mul = Self::set1_f32(134217730.);
             let denorm_th = Self::set1_f32(1.1754945e-38);
-            let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+            let denorm_mask = Self::cmp_lt_f32(a, denorm_th);
             let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
 
             let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
@@ -895,6 +907,279 @@ mod avx2_fma_mod {
 }
 #[cfg(target_arch = "x86_64")]
 pub(crate) use avx2_fma_mod::*;
+
+#[cfg(target_arch = "aarch64")]
+mod aarch64_mod {
+    use core::arch::aarch64::*;
+    pub(crate) struct Neon {}
+
+    type V = float32x4_t;
+    type V2 = float64x2_t;
+
+    type VI = int32x4_t;
+
+    impl Neon {
+        const F32_WIDTH: usize = 4;
+        #[inline(always)]
+        unsafe fn set1_f32(x: f32) -> V {
+            vdupq_n_f32(x)
+        }
+        #[inline(always)]
+        unsafe fn set1_i32(x: i32) -> VI {
+            vdupq_n_s32(x)
+        }
+
+        #[inline(always)]
+        unsafe fn sqrt_f32(x: V) -> V {
+            vsqrtq_f32(x)
+        }
+
+        #[inline(always)]
+        unsafe fn sqrt_f64(x: V2) -> V2 {
+            vsqrtq_f64(x)
+        }
+
+        #[inline(always)]
+        unsafe fn loadu_f32(ptr: *const f32) -> V {
+            vld1q_f32(ptr)
+        }
+        #[inline(always)]
+        unsafe fn loadu_f64(ptr: *const f64) -> V2 {
+            vld1q_f64(ptr)
+        }
+
+        #[inline(always)]
+        unsafe fn storeu_f32(ptr: *mut f32, a: V) {
+            vst1q_f32(ptr, a)
+        }
+
+        #[inline(always)]
+        unsafe fn storeu_f64(ptr: *mut f64, a: V2) {
+            vst1q_f64(ptr, a)
+        }
+
+        #[inline(always)]
+        unsafe fn and_f32(a: V, b: V) -> V {
+            vreinterpretq_f32_s32(vandq_s32(vreinterpretq_s32_f32(a), vreinterpretq_s32_f32(b)))
+        }
+
+        #[inline(always)]
+        unsafe fn mul_f32(a: V, b: V) -> V {
+            vmulq_f32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn add_i32(a: VI, b: VI) -> VI {
+            vaddq_s32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn and_i32(a: VI, b: VI) -> VI {
+            vandq_s32(a, b)
+        }
+        #[inline(always)]
+        unsafe fn cvt_i32_f32(a: VI) -> V {
+            vcvtq_f32_s32(a)
+        }
+        #[inline(always)]
+        unsafe fn cvt_f32_i32(a: V) -> VI {
+            vcvtaq_s32_f32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn sub_i32(a: VI, b: VI) -> VI {
+            vaddq_s32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_i32(a: VI, b: VI) -> VI {
+            let b_not = vmvnq_s32(b);
+            vandq_s32(a, b_not)
+        }
+
+        #[inline(always)]
+        unsafe fn slli_i32<const IMM8: i32>(a: VI) -> VI {
+            vshlq_n_s32(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn srli_i32<const IMM8: i32>(a: VI) -> VI {
+            vshrq_n_s32(a, IMM8)
+        }
+
+        #[inline(always)]
+        unsafe fn cmpeq_i32(a: VI, b: VI) -> VI {
+            vreinterpretq_s32_u32(vceqq_s32(a, b))
+        }
+
+        #[inline(always)]
+        unsafe fn cast_i32_f32(a: VI) -> V {
+            vreinterpretq_f32_s32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn fmadd_f32(a: V, b: V, c: V) -> V {
+            vfmaq_f32(a, b, c)
+        }
+
+        #[inline(always)]
+        unsafe fn andnot_f32(a: V, b: V) -> V {
+            let a_i32 = vreinterpretq_s32_f32(a);
+            let b_i32 = vreinterpretq_s32_f32(b);
+            let c_i32 = Self::andnot_i32(a_i32, b_i32);
+            vreinterpretq_f32_s32(c_i32)
+        }
+
+        #[inline(always)]
+        unsafe fn add_f32(a: V, b: V) -> V {
+            vaddq_f32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn xor_f32(a: V, b: V) -> V {
+            vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(a), vreinterpretq_s32_f32(b)))
+        }
+
+        #[inline(always)]
+        unsafe fn sub_f32(a: V, b: V) -> V {
+            vsubq_f32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_eq_f32(a: V, b: V) -> V {
+            vreinterpretq_f32_u32(vceqq_f32(a, b))
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_lt_f32(a: V, b: V) -> V {
+            vreinterpretq_f32_u32(vcltq_f32(a, b))
+        }
+
+        #[inline(always)]
+        unsafe fn mask_mul_f32(mask: V, a: V, b: V) -> V {
+            let one = Self::set1_f32(1.0);
+            let one = Self::andnot_f32(mask, one);
+            let masked_one = Self::and_f32(b, mask);
+            let masked_b = Self::or_f32(masked_one, one);
+            let c = vmulq_f32(a, masked_b);
+            c
+        }
+
+        #[inline(always)]
+        unsafe fn mask_sub_f32(mask: V, a: V, b: V) -> V {
+            let masked_b = Self::and_f32(b, mask);
+            vsubq_f32(a, masked_b)
+        }
+
+        #[inline(always)]
+        unsafe fn or_f32(a: V, b: V) -> V {
+            vreinterpretq_f32_s32(vorrq_s32(vreinterpretq_s32_f32(a), vreinterpretq_s32_f32(b)))
+        }
+
+        #[inline(always)]
+        unsafe fn mask_add_f32(mask: V, a: V, b: V) -> V {
+            let masked_b = vreinterpretq_f32_s32(vandq_s32(vreinterpretq_s32_f32(b), vreinterpretq_s32_f32(mask)));
+            vaddq_f32(a, masked_b)
+        }
+
+        #[inline(always)]
+        unsafe fn cast_f32_i32(a: V) -> VI {
+            vreinterpretq_s32_f32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn min_f32(a: V, b: V) -> V {
+            vminq_f32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn max_f32(a: V, b: V) -> V {
+            vmaxq_f32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn floor_f32(a: V) -> V {
+            vrndmq_f32(a)
+        }
+
+        #[inline(always)]
+        unsafe fn div_f32(a: V, b: V) -> V {
+            vdivq_f32(a, b)
+        }
+
+        #[inline(always)]
+        unsafe fn get_exp_mant_f32(a: V) -> (V, V) {
+            let a_0 = a;
+            let zero_mask = Self::cmp_eq_f32(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_lt_f32(a, Self::set1_f32(0.0));
+            let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
+            let inf_mask = Self::cmp_eq_f32(a, Self::set1_f32(f32::INFINITY));
+            let denorm_mul = Self::set1_f32(134217730.);
+            let denorm_th = Self::set1_f32(1.1754945e-38);
+            let denorm_mask = Self::cmp_lt_f32(a, denorm_th);
+            let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
+
+            let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
+
+            /* keep only the fractional part */
+            a = Self::and_f32(a, inv_mant_mask);
+            a = Self::or_f32(a, Self::set1_f32(0.5));
+
+            // this is again another AVX2 instruction
+            imm0 = Self::sub_i32(imm0, Self::set1_i32(0x7f));
+
+            let e = Self::cvt_i32_f32(imm0);
+
+            let e = Self::mask_sub_f32(denorm_mask, e, Self::set1_f32(27.0));
+            let e = Self::mask_sub_f32(zero_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::mask_add_f32(inf_mask, e, Self::set1_f32(f32::INFINITY));
+            let e = Self::min_f32(e, a_0);
+            let e = Self::mask_add_f32(nan_mask, e, Self::set1_f32(f32::NAN));
+
+            (e, a)
+        }
+    }
+
+    impl_cos!(Neon, "neon", vs_cos_neon);
+    impl_sin!(Neon, "neon", vs_sin_neon);
+    impl_ln!(Neon, "neon", vs_ln_neon);
+    impl_exp!(Neon, "neon", vs_exp_neon, FMA);
+    impl_tanh!(Neon, "neon", vs_tanh_neon);
+
+    #[target_feature(enable = "neon")]
+    pub(crate) unsafe fn vs_sqrt_neon(n: usize, a: *const f32, b: *mut f32) {
+        const NR: usize = 8;
+        let mut i = 0;
+        while (i + NR) <= n {
+            let x = Neon::loadu_f32(a.offset(i as isize));
+            let y = Neon::sqrt_f32(x);
+            Neon::storeu_f32(b.offset(i as isize), y);
+            i += NR;
+        }
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+            i += 1;
+        }
+    }
+
+    #[target_feature(enable = "neon")]
+    pub(crate) unsafe fn vd_sqrt_neon(n: usize, a: *const f64, b: *mut f64) {
+        const NR: usize = 4;
+        let mut i = 0;
+        while (i + NR) <= n {
+            let x = Neon::loadu_f64(a.offset(i as isize));
+            let y = Neon::sqrt_f64(x);
+            Neon::storeu_f64(b.offset(i as isize), y);
+            i += NR;
+        }
+        while i < n {
+            *b.offset(i as isize) = (*a.offset(i as isize)).sqrt();
+            i += 1;
+        }
+    }
+}
+#[cfg(target_arch = "aarch64")]
+pub(crate) use aarch64_mod::*;
 
 #[cfg(target_arch = "x86_64")]
 mod avx_sse2_mod {
@@ -1042,8 +1327,13 @@ mod avx_sse2_mod {
         }
 
         #[inline(always)]
-        unsafe fn cmp_f32<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
-            _mm256_cmp_ps(a, b, IMM8)
+        unsafe fn cmp_eq_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_cmp_ps(a, b, _CMP_EQ_OS)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_lt_f32(a: __m256, b: __m256) -> __m256 {
+            _mm256_cmp_ps(a, b, _CMP_LT_OS)
         }
 
         #[inline(always)]
@@ -1096,8 +1386,8 @@ mod avx_sse2_mod {
         }
 
         #[inline(always)]
-        unsafe fn round_f32<const IMM8: i32>(a: __m256) -> __m256 {
-            _mm256_round_ps(a, IMM8)
+        unsafe fn floor_f32(a: __m256) -> __m256 {
+            _mm256_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)
         }
 
         #[inline(always)]
@@ -1113,13 +1403,13 @@ mod avx_sse2_mod {
         #[inline(always)]
         unsafe fn get_exp_mant_f32(a: __m256) -> (__m256, __m256) {
             let a_0 = a;
-            let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
-            let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+            let zero_mask = Self::cmp_eq_f32(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_lt_f32(a, Self::set1_f32(0.0));
             let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
-            let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+            let inf_mask = Self::cmp_eq_f32(a, Self::set1_f32(f32::INFINITY));
             let denorm_mul = Self::set1_f32(134217730.);
             let denorm_th = Self::set1_f32(1.1754945e-38);
-            let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+            let denorm_mask = Self::cmp_lt_f32(a, denorm_th);
             let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
 
             let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));
@@ -1294,8 +1584,13 @@ mod sse2_mod {
         }
 
         #[inline(always)]
-        unsafe fn cmp_f32<const IMM8: i32>(a: __m128, b: __m128) -> __m128 {
-            _mm_cmp_ps(a, b, IMM8)
+        unsafe fn cmp_eq_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_cmp_ps(a, b, _CMP_EQ_OS)
+        }
+
+        #[inline(always)]
+        unsafe fn cmp_lt_f32(a: __m128, b: __m128) -> __m128 {
+            _mm_cmp_ps(a, b, _CMP_LT_OS)
         }
 
         #[inline(always)]
@@ -1343,8 +1638,8 @@ mod sse2_mod {
         }
 
         #[inline(always)]
-        unsafe fn round_f32<const IMM8: i32>(a: __m128) -> __m128 {
-            _mm_round_ps(a, IMM8)
+        unsafe fn floor_f32(a: __m128) -> __m128 {
+            _mm_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)
         }
 
         #[inline(always)]
@@ -1360,13 +1655,13 @@ mod sse2_mod {
         #[inline(always)]
         unsafe fn get_exp_mant_f32(a: __m128) -> (__m128, __m128) {
             let a_0 = a;
-            let zero_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(0.0));
-            let nan_mask = Self::cmp_f32::<_CMP_LT_OS>(a, Self::set1_f32(0.0));
+            let zero_mask = Self::cmp_eq_f32(a, Self::set1_f32(0.0));
+            let nan_mask = Self::cmp_lt_f32(a, Self::set1_f32(0.0));
             let inv_mant_mask = Self::cast_i32_f32(Self::set1_i32(!0x7f800000));
-            let inf_mask = Self::cmp_f32::<_CMP_EQ_OS>(a, Self::set1_f32(f32::INFINITY));
+            let inf_mask = Self::cmp_eq_f32(a, Self::set1_f32(f32::INFINITY));
             let denorm_mul = Self::set1_f32(134217730.);
             let denorm_th = Self::set1_f32(1.1754945e-38);
-            let denorm_mask = Self::cmp_f32::<_CMP_LT_OS>(a, denorm_th);
+            let denorm_mask = Self::cmp_lt_f32(a, denorm_th);
             let mut a = Self::mask_mul_f32(denorm_mask, a, denorm_mul);
 
             let mut imm0 = Self::srli_i32::<23>(Self::cast_f32_i32(a));

@@ -40,10 +40,6 @@ pub struct CpuFeatures {
 pub struct CpuFeatures {
     pub sve: bool,
     pub neon: bool,
-    pub fp16: bool,
-    pub f32mm: bool,
-    pub fcma: bool,
-    pub i8mm: bool,
 }
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64"))]
@@ -102,11 +98,7 @@ fn detect_hw_config() -> CpuFeatures {
         use std::arch::is_aarch64_feature_detected;
         let neon = is_aarch64_feature_detected!("neon");
         let sve = is_aarch64_feature_detected!("sve");
-        let fp16 = is_aarch64_feature_detected!("fp16");
-        let f32mm = is_aarch64_feature_detected!("f32mm");
-        let fcma = is_aarch64_feature_detected!("fcma");
-        let i8mm = is_aarch64_feature_detected!("i8mm");
 
-        return CpuFeatures { neon, sve, fp16, f32mm, fcma, i8mm };
+        return CpuFeatures { neon, sve };
     }
 }
