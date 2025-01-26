@@ -18,10 +18,6 @@ pub(crate) struct CpuFeatures {
     pub(crate) avx: bool,
     pub(crate) avx2: bool,
     pub(crate) avx512f: bool,
-    pub(crate) avx512f16: bool,
-    // pub(crate) avx512bf16: bool,
-    pub(crate) avx512bw: bool,
-    pub(crate) avx512_vnni: bool,
     pub(crate) fma: bool,
     pub(crate) fma4: bool,
     pub(crate) f16c: bool,
@@ -68,11 +64,7 @@ fn detect_hw_config() -> CpuFeatures {
         let avx = feature_info.has_avx();
         let fma = feature_info.has_fma();
         let avx2 = extended_feature_info.has_avx2();
-        let avx512f16 = extended_feature_info.has_avx512_fp16();
-        // let avx512bf16 = extended_feature_info.has_avx512_bf16();
         let avx512f = extended_feature_info.has_avx512f();
-        let avx512bw = extended_feature_info.has_avx512bw();
-        let avx512_vnni = extended_feature_info.has_avx512vnni();
         let f16c = feature_info.has_f16c();
         let extended_processor_info = cpuid.get_extended_processor_and_feature_identifiers().unwrap();
         let fma4 = extended_processor_info.has_fma4();
@@ -84,9 +76,6 @@ fn detect_hw_config() -> CpuFeatures {
             avx,
             avx2,
             avx512f,
-            avx512f16,
-            avx512bw,
-            avx512_vnni,
             fma,
             fma4,
             f16c,
