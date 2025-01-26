@@ -1,3 +1,5 @@
+#[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64", target_arch = "wasm32"))]
+pub(crate) mod simd;
 pub(crate) mod unary;
 use once_cell::sync::Lazy;
 
@@ -42,7 +44,16 @@ pub struct CpuFeatures {
     pub neon: bool,
 }
 
-#[cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64"))]
+#[cfg(target_arch = "wasm32")]
+#[derive(Copy, Clone)]
+pub struct CpuFeatures {
+    pub simd128: bool,
+}
+
+#[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64", target_arch = "wasm32")))]
+#[derive(Copy, Clone)]
+pub struct CpuFeatures {}
+
 #[inline]
 fn detect_hw_config() -> CpuFeatures {
     #[cfg(target_arch = "x86_64")]
@@ -100,5 +111,19 @@ fn detect_hw_config() -> CpuFeatures {
         let sve = is_aarch64_feature_detected!("sve");
 
         return CpuFeatures { neon, sve };
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        #[cfg(target_feature = "simd128")]
+        let simd128 = true;
+        #[cfg(not(target_feature = "simd128"))]
+        let simd128 = false;
+        return CpuFeatures { simd128 };
+    }
+
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64", target_arch = "wasm32")))]
+    {
+        CpuFeatures {}
     }
 }
