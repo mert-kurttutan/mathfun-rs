@@ -68,18 +68,7 @@ fn detect_hw_config() -> CpuFeatures {
         let f16c = feature_info.has_f16c();
         let extended_processor_info = cpuid.get_extended_processor_and_feature_identifiers().unwrap();
         let fma4 = extended_processor_info.has_fma4();
-        let cpu_ft = CpuFeatures {
-            sse,
-            sse2,
-            sse3,
-            ssse3,
-            avx,
-            avx2,
-            avx512f,
-            fma,
-            fma4,
-            f16c,
-        };
+        let cpu_ft = CpuFeatures { sse, sse2, sse3, ssse3, avx, avx2, avx512f, fma, fma4, f16c };
         cpu_ft
     }
     #[cfg(target_arch = "x86")]
