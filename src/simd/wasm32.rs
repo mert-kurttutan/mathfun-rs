@@ -117,7 +117,12 @@ impl Simd for Wasm32 {
 
     #[inline(always)]
     unsafe fn fmadd_f32(a: Self::Vf32, b: Self::Vf32, c: Self::Vf32) -> Self::Vf32 {
-        f32x4_relaxed_madd(a, b, c)
+        #[cfg(target_feature = "relaxed-simd")]
+        {
+            return f32x4_relaxed_madd(a, b, c);
+        }
+        let ab = f32x4_mul(a, b);
+        f32x4_add(ab, c)
     }
 
     #[inline(always)]
