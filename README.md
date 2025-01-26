@@ -2,7 +2,7 @@
 Prvoides simd-enabled implementation of several mathfunctions to help deep learning and high performance computing in rust have high performance.
 
 # Threading control
-The library uses rayon for parallelism. You can control the number of threads used by setting the `MATHFUN_NUM_THREADS` environment variable. Max number of thrading is 2 due to higher number of threads causing performance degradation.
+You can control the number of threads used by setting the `MATHFUN_NUM_THREADS` environment variable. Max number of thrading is 2 due to higher number of threads causing performance degradation.
 
 # Hardware support:
 
@@ -19,3 +19,5 @@ To enable simd on wasm32 target, you need to use tthe flag to enable the feature
 | vs_sin      |  ✅   |   ✅  |  ✅   |    ❌     |  ✅    |   ✅   |
 | vs_cos      |  ✅   |  ✅   |   ✅  |    ❌     |  ✅    |   ✅   |
 | vs_tanh     |  ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ✅  |
+| vs_sqrt    |  ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ✅  |
+| vd_sqrt    | ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ✅  |

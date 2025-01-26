@@ -19,6 +19,7 @@ use crate::RUNTIME_HW_CONFIG;
 
 macro_rules! impl_unary {
     (
+        $docs:tt,
         $name:ident, $dispatch_fn:ident, $ta:ty, $tb:ty,
         $($target_arch:tt | $extension:expr => $fn_simd:ident,)*
 
@@ -32,6 +33,7 @@ macro_rules! impl_unary {
             )*
             Fallback::$name
         }
+        #[doc = $docs]
         pub unsafe fn $name(n: usize, a: *const $ta, y: *mut $tb) {
             if n == 0 {
                 return;
@@ -73,9 +75,18 @@ macro_rules! impl_unary {
     };
 }
 
-impl_unary!(vd_exp, dispatch_vd_exp, f64, f64,);
+// add docs for vd_exp
 
 impl_unary!(
+    r"Calculates the exponential of each element in an array of f64 for length n",
+    vd_exp,
+    dispatch_vd_exp,
+    f64,
+    f64,
+);
+
+impl_unary!(
+    r"Calculates the exponential of each element in an array of f32 for length n",
     vs_exp, dispatch_vs_exp, f32, f32,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => Avx512f,
     "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => Avx2Fma,
@@ -86,8 +97,15 @@ impl_unary!(
     "wasm32" | RUNTIME_HW_CONFIG.simd128 => Wasm32,
 );
 
-impl_unary!(vd_ln, dispatch_vd_ln, f64, f64,);
 impl_unary!(
+    r"Calculates the natural logarithm of each element in an array of f64 for length n",
+    vd_ln,
+    dispatch_vd_ln,
+    f64,
+    f64,
+);
+impl_unary!(
+    r"Calculates the natural logarithm of each element in an array of f32 for length n",
     vs_ln, dispatch_vs_ln, f32, f32,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => Avx512f,
     "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => Avx2Fma,
@@ -98,9 +116,16 @@ impl_unary!(
     "wasm32" | RUNTIME_HW_CONFIG.simd128 => Wasm32,
 );
 
-impl_unary!(vd_tanh, dispatch_vd_tanh, f64, f64,);
+impl_unary!(
+    r"Calculates the tanh of each element in an array of f64 for length n",
+    vd_tanh,
+    dispatch_vd_tanh,
+    f64,
+    f64,
+);
 
 impl_unary!(
+    r"Calculates the tanh of each element in an array of f32 for length n",
     vs_tanh, dispatch_vs_tanh, f32, f32,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => Avx512f,
     "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => Avx2Fma,
@@ -112,6 +137,7 @@ impl_unary!(
 );
 
 impl_unary!(
+    r"Calculates the square root of each element in an array of f64 for length n",
     vd_sqrt, dispatch_vd_sqrt, f64, f64,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => Avx512f,
     "x86_64" | RUNTIME_HW_CONFIG.avx => AvxSse2,
@@ -121,6 +147,7 @@ impl_unary!(
     "wasm32" | RUNTIME_HW_CONFIG.simd128 => Wasm32,
 );
 impl_unary!(
+    r"Calculates the square root of each element in an array of f32 for length n",
     vs_sqrt, dispatch_vs_sqrt, f32, f32,
     "x86_64" | RUNTIME_HW_CONFIG.avx512f => Avx512f,
     "x86_64" | RUNTIME_HW_CONFIG.avx =>  AvxSse2,
@@ -130,9 +157,10 @@ impl_unary!(
     "wasm32" | RUNTIME_HW_CONFIG.simd128 => Wasm32,
 );
 
-impl_unary!(vd_sin, dispatch_vd_sin, f64, f64,);
+impl_unary!(r"Calculates the sin of each element in an array of f64 for length n", vd_sin, dispatch_vd_sin, f64, f64,);
 
 impl_unary!(
+    r"Calculates the sin of each element in an array of f32 for length n",
     vs_sin, dispatch_vs_sin, f32, f32,
     "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => Avx2Fma,
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => AvxSse2,
@@ -142,8 +170,15 @@ impl_unary!(
     "wasm32" | RUNTIME_HW_CONFIG.simd128 => Wasm32,
 );
 
-impl_unary!(vd_cos, dispatch_vd_cos, f64, f64,);
 impl_unary!(
+    r"Calculates the cosine of each element in an array of f64 for length n",
+    vd_cos,
+    dispatch_vd_cos,
+    f64,
+    f64,
+);
+impl_unary!(
+    r"Calculates the cosine of each element in an array of f32 for length n",
     vs_cos, dispatch_vs_cos, f32, f32,
     "x86_64" | RUNTIME_HW_CONFIG.avx2 && RUNTIME_HW_CONFIG.fma => Avx2Fma,
     "x86_64" | RUNTIME_HW_CONFIG.avx && RUNTIME_HW_CONFIG.sse2 => AvxSse2,
