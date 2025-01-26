@@ -10,8 +10,8 @@ The library uses rayon for parallelism. You can control the number of threads us
 
 | Function | SSE2 | AVX,SSE2 | AVX2,FMA | AVX512F | NEON | WASM |
 |----------|-----|-----|-----|--------|------|------|
-| vs_exp      |  ✅   |   ✅  |   ✅  |    ✅    |   ❌   |   ❌   |
-| vs_ln       |  ✅   |   ✅  |  ✅   |   ✅      |   ❌   |   ❌   |
-| vs_sin      |  ✅   |   ✅  |  ✅   |    ❌     |  ❌    |   ❌   |
-| vs_cos      |  ✅   |  ✅   |   ✅  |    ❌     |  ❌    |   ❌   |
-| vs_tanh     |  ✅   |   ✅  |  ✅   |    ✅    |    ❌  |    ❌  |
+| vs_exp      |  ✅   |   ✅  |   ✅  |    ✅    |   ✅   |   ❌   |
+| vs_ln       |  ✅   |   ✅  |  ✅   |   ✅      |   ✅   |   ❌   |
+| vs_sin      |  ✅   |   ✅  |  ✅   |    ❌     |  ✅    |   ❌   |
+| vs_cos      |  ✅   |  ✅   |   ✅  |    ❌     |  ✅    |   ❌   |
+| vs_tanh     |  ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ❌  |
