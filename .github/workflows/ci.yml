@@ -31,10 +31,10 @@ jobs:
         run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
         if: matrix.rust == 'nightly'
       - run: cargo test --release
+      - run: cargo install wasm-runner
+      - run: curl https://wasmtime.dev/install.sh -sSf | bash
       - name: wasm testing
         run:
-          cargo install wasm-runner
-          curl https://wasmtime.dev/install.sh -sSf | bash
           cargo test --target="wasm32-wasip1" --release
       - uses: actions/upload-artifact@v4
         if: matrix.rust == 'nightly' && always()
