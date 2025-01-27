@@ -232,18 +232,37 @@ impl_fallback!(vs_cos, cos, f32);
 mod tests {
     use super::*;
 
-    fn full_range_f32_pair() -> (Vec<f32>, Vec<f32>) {
-        let v_len = 1 << 32;
-        // let v_len = 16;
-        println!("v_len log2: {}", (v_len as f64).log2());
-        let mut a = vec![0f32; v_len];
-        let b = vec![0f32; v_len];
-        // collect the max value and print
-        for i in 0..v_len {
-            a[i] = f32::from_bits(i as u32);
+    struct F32Pool {
+        a: Vec<f32>,
+        b: Vec<f32>,
+        // n: usize,
+    }
+
+    impl F32Pool {
+        pub(crate) fn new() -> Self {
+            Self {
+                a: vec![0.0; 1 << 20],
+                b: vec![0.0; 1 << 20],
+                // n: 12,
+            }
         }
 
-        (a, b)
+        pub(crate) fn set_interval(&mut self, n: usize) {
+            assert!(n <= 1 << 12);
+            let bit_start = n * self.a.len();
+            for i in 0..n {
+                self.a[i] = f32::from_bits(bit_start as u32 + i as u32);
+            }
+        }
+
+        pub(crate) fn get_interval(&mut self) -> (&[f32], &mut [f32]) {
+            (&self.a, &mut self.b)
+        }
+
+        pub(crate) fn len(&self) -> usize {
+            assert_eq!(self.a.len(), self.b.len());
+            self.a.len()
+        }
     }
 
     fn check_nan_inf(y_result: f64, y: f64) -> bool {
@@ -261,7 +280,6 @@ mod tests {
         return false;
     }
     fn check_exp(x: f32, y: f32) {
-        // println!("x.exp(): {}", x.exp());
         let x = x as f64;
         let y = y as f64;
 
@@ -360,72 +378,102 @@ mod tests {
 
     #[test]
     fn accuracy_sqrt() {
-        let (a, mut b) = full_range_f32_pair();
-        let a_len = a.len();
-        unsafe {
-            vs_sqrt(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        for i in 0..a_len {
-            check_sqrt(a[i], b[i]);
+        let mut pool = F32Pool::new();
+        let a_len = pool.len();
+
+        for a_i in 0..1 << 12 {
+            pool.set_interval(a_i);
+            let (a, b) = pool.get_interval();
+            unsafe {
+                vs_sqrt(a_len, a.as_ptr(), b.as_mut_ptr());
+            }
+            for i in 0..a_len {
+                check_sqrt(a[i], b[i]);
+            }
         }
     }
 
     #[test]
     fn accuracy_sin() {
-        let (a, mut b) = full_range_f32_pair();
-        let a_len = a.len();
-        unsafe {
-            vs_sin(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        for i in 0..a_len {
-            check_sin(a[i], b[i]);
+        let mut pool = F32Pool::new();
+        let a_len = pool.len();
+
+        for a_i in 0..1 << 12 {
+            pool.set_interval(a_i);
+            let (a, b) = pool.get_interval();
+            unsafe {
+                vs_sin(a_len, a.as_ptr(), b.as_mut_ptr());
+            }
+            for i in 0..a_len {
+                check_sin(a[i], b[i]);
+            }
         }
     }
 
     #[test]
     fn accuracy_cos() {
-        let (a, mut b) = full_range_f32_pair();
-        let a_len = a.len();
-        unsafe {
-            vs_cos(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        for i in 0..a_len {
-            check_cos(a[i], b[i]);
+        let mut pool = F32Pool::new();
+        let a_len = pool.len();
+
+        for a_i in 0..1 << 12 {
+            pool.set_interval(a_i);
+            let (a, b) = pool.get_interval();
+            unsafe {
+                vs_cos(a_len, a.as_ptr(), b.as_mut_ptr());
+            }
+            for i in 0..a_len {
+                check_cos(a[i], b[i]);
+            }
         }
     }
 
     #[test]
     fn accuracy_exp() {
-        let (a, mut b) = full_range_f32_pair();
-        let a_len = a.len();
-        unsafe {
-            vs_exp(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        for i in 0..a_len {
-            check_exp(a[i], b[i]);
+        let mut pool = F32Pool::new();
+        let a_len = pool.len();
+
+        for a_i in 0..1 << 12 {
+            pool.set_interval(a_i);
+            let (a, b) = pool.get_interval();
+            unsafe {
+                vs_exp(a_len, a.as_ptr(), b.as_mut_ptr());
+            }
+            for i in 0..a_len {
+                check_exp(a[i], b[i]);
+            }
         }
     }
 
     #[test]
     fn accuracy_tanh() {
-        let (a, mut b) = full_range_f32_pair();
-        let a_len = a.len();
-        unsafe {
-            vs_tanh(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        for i in 0..a_len {
-            check_tanh(a[i], b[i]);
+        let mut pool = F32Pool::new();
+        let a_len = pool.len();
+
+        for a_i in 0..1 << 12 {
+            pool.set_interval(a_i);
+            let (a, b) = pool.get_interval();
+            unsafe {
+                vs_tanh(a_len, a.as_ptr(), b.as_mut_ptr());
+            }
+            for i in 0..a_len {
+                check_tanh(a[i], b[i]);
+            }
         }
     }
     #[test]
     fn accuracy_ln() {
-        let (a, mut b) = full_range_f32_pair();
-        let a_len = a.len();
-        unsafe {
-            vs_ln(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        for i in 0..a_len {
-            check_ln(a[i], b[i]);
+        let mut pool = F32Pool::new();
+        let a_len = pool.len();
+
+        for a_i in 0..1 << 12 {
+            pool.set_interval(a_i);
+            let (a, b) = pool.get_interval();
+            unsafe {
+                vs_ln(a_len, a.as_ptr(), b.as_mut_ptr());
+            }
+            for i in 0..a_len {
+                check_ln(a[i], b[i]);
+            }
         }
     }
     const PROJECT_DIR: &str = "C:\\Users\\I011745\\Desktop\\corenum\\pire\\.venv\\Library\\bin";

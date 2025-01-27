@@ -76,6 +76,11 @@ impl Simd for Wasm32 {
     }
 
     #[inline(always)]
+    unsafe fn cvtt_f32_i32(a: Self::Vf32) -> Self::Vi32 {
+        i32x4_trunc_sat_f32x4(a)
+    }
+
+    #[inline(always)]
     unsafe fn cvt_f32_i32(a: Self::Vf32) -> Self::Vi32 {
         i32x4_trunc_sat_f32x4(a)
     }

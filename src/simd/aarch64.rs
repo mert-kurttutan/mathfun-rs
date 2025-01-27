@@ -75,6 +75,11 @@ impl Simd for Neon {
     }
 
     #[inline(always)]
+    unsafe fn cvtt_f32_i32(a: Self::Vf32) -> Self::Vi32 {
+        vcvtq_s32_f32(a)
+    }
+
+    #[inline(always)]
     unsafe fn sub_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32 {
         vaddq_s32(a, b)
     }

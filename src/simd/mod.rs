@@ -35,6 +35,7 @@ pub(crate) trait Simd {
     unsafe fn and_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32;
     unsafe fn cvt_i32_f32(a: Self::Vi32) -> Self::Vf32;
     unsafe fn cvt_f32_i32(a: Self::Vf32) -> Self::Vi32;
+    unsafe fn cvtt_f32_i32(a: Self::Vf32) -> Self::Vi32;
     unsafe fn sqrt_f32(a: Self::Vf32) -> Self::Vf32;
     unsafe fn sqrt_f64(a: Self::Vf64) -> Self::Vf64;
     unsafe fn sub_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32;
@@ -373,7 +374,7 @@ pub(crate) trait UnaryFn2: Simd {
             let mut y = Self::mul_f32(x, fopi);
 
             // store the integer part of y in mm0
-            let mut imm2 = Self::cvt_f32_i32(y);
+            let mut imm2 = Self::cvtt_f32_i32(y);
             // j=(j+1) & (~1) (see the cephes sources)
             // another two AVX2 instruction
             imm2 = Self::add_i32(imm2, Self::set1_i32(1));
@@ -469,7 +470,7 @@ pub(crate) trait UnaryFn2: Simd {
             let x = Self::loadu_f32(a.offset(i as isize));
             let x = Self::and_f32(x, inv_sign_mask);
             let mut y = Self::mul_f32(x, fopi);
-            let mut imm2 = Self::cvt_f32_i32(y);
+            let mut imm2 = Self::cvtt_f32_i32(y);
             imm2 = Self::add_i32(imm2, Self::set1_i32(1));
             imm2 = Self::and_i32(imm2, Self::set1_i32(!1));
             y = Self::cvt_i32_f32(imm2);

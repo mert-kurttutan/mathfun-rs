@@ -83,6 +83,11 @@ impl Simd for Sse2 {
     }
 
     #[inline(always)]
+    unsafe fn cvtt_f32_i32(a: __m128) -> __m128i {
+        _mm_cvttps_epi32(a)
+    }
+
+    #[inline(always)]
     unsafe fn andnot_i32(a: __m128i, b: __m128i) -> __m128i {
         _mm_andnot_si128(a, b)
     }

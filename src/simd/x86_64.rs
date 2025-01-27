@@ -68,6 +68,11 @@ impl Simd for Avx2Fma {
     }
 
     #[inline(always)]
+    unsafe fn cvtt_f32_i32(a: __m256) -> __m256i {
+        _mm256_cvttps_epi32(a)
+    }
+
+    #[inline(always)]
     unsafe fn sub_i32(a: __m256i, b: __m256i) -> __m256i {
         _mm256_sub_epi32(a, b)
     }
@@ -344,6 +349,11 @@ impl Simd for AvxSse2 {
     }
 
     #[inline(always)]
+    unsafe fn cvtt_f32_i32(a: __m256) -> __m256i {
+        _mm256_cvttps_epi32(a)
+    }
+
+    #[inline(always)]
     unsafe fn sub_i32(a: __m256i, b: __m256i) -> __m256i {
         // extract second half of a and b
         let a1 = _mm256_extractf128_si256(a, 1);
@@ -617,37 +627,37 @@ impl UnaryFn1 for AvxSse2 {
 impl UnaryFn2 for AvxSse2 {}
 
 impl AvxSse2 {
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vs_exp(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_exp_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vs_ln(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_ln_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vs_tanh(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_tanh_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vs_sin(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_sin_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vs_cos(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_cos_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vs_sqrt(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_sqrt_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx,sse2")]
     pub(crate) unsafe fn vd_sqrt(n: usize, a: *const f64, b: *mut f64) {
         Self::vd_sqrt_0(n, a, b)
     }
