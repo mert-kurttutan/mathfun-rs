@@ -31,6 +31,12 @@ jobs:
         run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
         if: matrix.rust == 'nightly'
       - run: cargo test --release
+      - run: cargo install wasm-runner
+      - run: curl https://wasmtime.dev/install.sh -sSf | bash
+      - run: rustup target add wasm32-wasip1
+      - name: wasm testing
+        run:
+          cargo test --target="wasm32-wasip1" --release
       - uses: actions/upload-artifact@v4
         if: matrix.rust == 'nightly' && always()
         with:
@@ -59,7 +65,9 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
       - uses: dtolnay/install@cargo-docs-rs
       - run: cargo docs-rs
 
@@ -70,6 +78,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: dtolnay/install@cargo-outdated
       - run: cargo outdated --workspace --exit-code 1
