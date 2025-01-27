@@ -16,7 +16,7 @@ jobs:
 
   test:
     name: Rust ${{matrix.rust}}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest, ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
