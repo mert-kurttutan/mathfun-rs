@@ -82,13 +82,13 @@ impl Simd for Neon {
 
     #[inline(always)]
     unsafe fn sub_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32 {
-        vaddq_s32(a, b)
+        vsubq_s32(a, b)
     }
 
     #[inline(always)]
     unsafe fn andnot_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32 {
-        let b_not = vmvnq_s32(b);
-        vandq_s32(a, b_not)
+        let a_not = vmvnq_s32(a);
+        vandq_s32(a_not, b)
     }
 
     #[inline(always)]
@@ -113,7 +113,7 @@ impl Simd for Neon {
 
     #[inline(always)]
     unsafe fn fmadd_f32(a: Self::Vf32, b: Self::Vf32, c: Self::Vf32) -> Self::Vf32 {
-        vfmaq_f32(a, b, c)
+        vfmaq_f32(c, a, b)
     }
 
     #[inline(always)]
