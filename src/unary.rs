@@ -476,53 +476,52 @@ mod tests {
             }
         }
     }
-    const PROJECT_DIR: &str = "C:\\Users\\I011745\\Desktop\\corenum\\pire\\.venv\\Library\\bin";
-    use libc::{c_float, c_int};
+    // use libc::{c_float, c_int};
 
-    use once_cell::sync::Lazy;
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
-    static MATHFUN_LIBRARY: Lazy<libloading::Library> = Lazy::new(|| unsafe {
-        #[cfg(target_os = "windows")]
-        let default_cblas_path = format!("{PROJECT_DIR}/mkl_rt.2.dll");
-        #[cfg(target_os = "linux")]
-        let default_cblas_path = format!("{PROJECT_DIR}/../../.venv/lib/libmkl_rt.so.2");
-        let cblas_path = std::env::var("PIRE_MATHFUN_PATH").unwrap_or(default_cblas_path);
-        libloading::Library::new(cblas_path).unwrap()
-    });
-    type UnaryFnF32 = unsafe extern "C" fn(c_int, *const c_float, *mut c_float);
+    // use once_cell::sync::Lazy;
+    // use rand::rngs::StdRng;
+    // use rand::{Rng, SeedableRng};
+    // static MATHFUN_LIBRARY: Lazy<libloading::Library> = Lazy::new(|| unsafe {
+    //     #[cfg(target_os = "windows")]
+    //     let default_cblas_path = format!("{PROJECT_DIR}/mkl_rt.2.dll");
+    //     #[cfg(target_os = "linux")]
+    //     let default_cblas_path = format!("{PROJECT_DIR}/../../.venv/lib/libmkl_rt.so.2");
+    //     let cblas_path = std::env::var("PIRE_MATHFUN_PATH").unwrap_or(default_cblas_path);
+    //     libloading::Library::new(cblas_path).unwrap()
+    // });
+    // type UnaryFnF32 = unsafe extern "C" fn(c_int, *const c_float, *mut c_float);
 
-    fn random_matrix_std<T>(arr: &mut [T])
-    where
-        rand::distributions::Standard: rand::prelude::Distribution<T>,
-    {
-        let mut x = StdRng::seed_from_u64(43);
-        arr.iter_mut().for_each(|p| *p = x.gen::<T>());
-    }
-    static VS_COS_MKL: Lazy<libloading::Symbol<'static, UnaryFnF32>> = Lazy::new(|| unsafe {
-        let unary_fn = MATHFUN_LIBRARY.get(b"vsExp").unwrap();
-        unary_fn
-    });
+    // fn random_matrix_std<T>(arr: &mut [T])
+    // where
+    //     rand::distributions::Standard: rand::prelude::Distribution<T>,
+    // {
+    //     let mut x = StdRng::seed_from_u64(43);
+    //     arr.iter_mut().for_each(|p| *p = x.gen::<T>());
+    // }
+    // static VS_COS_MKL: Lazy<libloading::Symbol<'static, UnaryFnF32>> = Lazy::new(|| unsafe {
+    //     let unary_fn = MATHFUN_LIBRARY.get(b"vsExp").unwrap();
+    //     unary_fn
+    // });
 
-    unsafe fn vs_cos_mkl(n: c_int, a: *const c_float, y: *mut c_float) {
-        VS_COS_MKL(n, a, y);
-    }
-    #[test]
-    fn mkl_test() {
-        let m = 1 << 31 - 1;
-        let mut a = vec![1.0; m];
-        let mut b = vec![1.0; m];
-        random_matrix_std(&mut a);
-        random_matrix_std(&mut b);
-        let a_len = a.len();
-        let a_len_i32 = a_len as i32;
-        println!("a_len_i32: {}", a_len_i32);
-        let t0 = std::time::Instant::now();
-        unsafe {
-            vs_cos_mkl(a_len_i32, a.as_ptr(), b.as_mut_ptr());
-            // vs_cos(a_len, a.as_ptr(), b.as_mut_ptr());
-        }
-        let t1 = std::time::Instant::now();
-        println!("time: {:?}", t1 - t0);
-    }
+    // unsafe fn vs_cos_mkl(n: c_int, a: *const c_float, y: *mut c_float) {
+    //     VS_COS_MKL(n, a, y);
+    // }
+    // #[test]
+    // fn mkl_test() {
+    //     let m = 1 << 31 - 1;
+    //     let mut a = vec![1.0; m];
+    //     let mut b = vec![1.0; m];
+    //     random_matrix_std(&mut a);
+    //     random_matrix_std(&mut b);
+    //     let a_len = a.len();
+    //     let a_len_i32 = a_len as i32;
+    //     println!("a_len_i32: {}", a_len_i32);
+    //     let t0 = std::time::Instant::now();
+    //     unsafe {
+    //         vs_cos_mkl(a_len_i32, a.as_ptr(), b.as_mut_ptr());
+    //         // vs_cos(a_len, a.as_ptr(), b.as_mut_ptr());
+    //     }
+    //     let t1 = std::time::Instant::now();
+    //     println!("time: {:?}", t1 - t0);
+    // }
 }
