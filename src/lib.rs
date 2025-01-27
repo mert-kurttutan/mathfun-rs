@@ -84,12 +84,24 @@ fn detect_hw_config() -> CpuFeatures {
         let cpu_ft = CpuFeatures { sse, sse2, sse3, ssse3 };
         return cpu_ft;
     }
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(all(target_arch = "aarch64", feature = "std"))]
     {
         use std::arch::is_aarch64_feature_detected;
         let neon = is_aarch64_feature_detected!("neon");
         let sve = is_aarch64_feature_detected!("sve");
 
+        return CpuFeatures { neon, sve };
+    }
+    #[cfg(all(target_arch = "aarch64", not(feature = "std")))]
+    {
+        #[cfg(target_feature = "neon")]
+        let neon = true;
+        #[cfg(not(target_feature = "neon"))]
+        let neon = false;
+        #[cfg(target_feature = "sve")]
+        let sve = true;
+        #[cfg(not(target_feature = "sve"))]
+        let sve = false;
         return CpuFeatures { neon, sve };
     }
 

@@ -16,11 +16,12 @@ jobs:
 
   test:
     name: Rust ${{matrix.rust}}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         rust: [nightly, beta, stable, 1.81.0]
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
