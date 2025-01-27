@@ -5,10 +5,10 @@ use std::time::Duration;
 
 pub fn random_matrix_std<T>(arr: &mut [T])
 where
-    rand::distributions::Standard: rand::prelude::Distribution<T>,
+    rand::distr::StandardUniform: rand::prelude::Distribution<T>,
 {
     let mut x = StdRng::seed_from_u64(43);
-    arr.iter_mut().for_each(|p| *p = x.gen::<T>());
+    arr.iter_mut().for_each(|p| *p = x.random::<T>());
 }
 
 use criterion::BenchmarkId;

@@ -18,7 +18,7 @@ raw-cpuid = "11.3.0"
 [dev-dependencies]
 # disable rayon to enable testing on wasm32 target
 criterion = {version="0.5", features=["plotters", "cargo_bench_support"], default-features=false}
-rand = "0.8.5"
+rand = "0.9"
 libloading = "0.8.5"
 libc = "0.2"
 
