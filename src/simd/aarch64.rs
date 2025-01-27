@@ -1,7 +1,8 @@
+use super::{Simd, UnaryFn1, UnaryFn2};
 use core::arch::aarch64::*;
+
 pub(crate) struct Neon {}
 
-use super::{Simd, UnaryFn1, UnaryFn2};
 impl Simd for Neon {
     const F32_WIDTH: usize = 4;
     const F64_WIDTH: usize = 2;

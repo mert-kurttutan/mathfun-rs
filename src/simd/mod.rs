@@ -213,8 +213,8 @@ pub(crate) trait UnaryFn1: Simd {
     }
     unsafe fn vs_tanh_0(n: usize, a: *const f32, b: *mut f32) {
         // define constants
-        const EXP_HI: f32 = 88.7228391117 * 1.0;
-        const EXP_LO: f32 = -88.7228391117 * 1.0;
+        const EXP_HI: f32 = 88.7228391117 * 0.5;
+        const EXP_LO: f32 = -88.7228391117 * 0.5;
         const LOG2EF: f32 = 1.44269504088896341;
         const INV_LOG2EF: f32 = 0.69314718056;
         const EXP_P0: f32 = 0.00032712723;
@@ -247,14 +247,12 @@ pub(crate) trait UnaryFn1: Simd {
         let mut i = 0;
         while (i + Self::F32_WIDTH) <= n {
             let x = Self::loadu_f32(a.offset(i as isize));
-            let x0 = x;
-            let x0 = Self::max_f32(exp_hi, x0);
             let x = Self::min_f32(exp_hi, x);
             let x = Self::max_f32(exp_lo, x);
 
-            let fx = Self::mul_f32(x, log2ef);
-            let fx = Self::floor_f32(fx);
-            let fx = Self::max_f32(fx, min_exponent);
+            let mut fx = Self::mul_f32(x, log2ef);
+            fx = Self::floor_f32(fx);
+            fx = Self::max_f32(fx, min_exponent);
 
             let x = Self::fmadd_f32(fx, inv_c2, x);
             let x = Self::sub_f32(x, half);
@@ -268,9 +266,9 @@ pub(crate) trait UnaryFn1: Simd {
             y = Self::fmadd_f32(y, x, e_sqrt);
             y = Self::fmadd_f32(y, x, e_sqrt);
 
-            let imm0 = Self::cvt_f32_i32(fx);
-            let imm0 = Self::add_i32(imm0, Self::set1_i32(0x7f));
-            let imm0 = Self::slli_i32::<23>(imm0);
+            let mut imm0 = Self::cvt_f32_i32(fx);
+            imm0 = Self::add_i32(imm0, Self::set1_i32(0x7f));
+            imm0 = Self::slli_i32::<23>(imm0);
             let pow2n = Self::cast_i32_f32(imm0);
 
             let r = Self::mul_f32(y, pow2n);
@@ -279,9 +277,8 @@ pub(crate) trait UnaryFn1: Simd {
             let numerator = Self::sub_f32(r, one);
             let denominator = Self::add_f32(r, one);
             let mut r = Self::div_f32(numerator, denominator);
-            r = Self::min_f32(r, one);
-            r = Self::max_f32(r, one_neg);
-            r = Self::min_f32(r, x0);
+            r = Self::min_f32(one, r);
+            r = Self::max_f32(one_neg, r);
 
             Self::storeu_f32(b.offset(i as isize), r);
             i += Self::F32_WIDTH;
