@@ -33,6 +33,7 @@ jobs:
       - run: cargo test --release
       - run: cargo install wasm-runner
       - run: curl https://wasmtime.dev/install.sh -sSf | bash
+      - run: rustup target add wasm32-wasip1
       - name: wasm testing
         run:
           cargo test --target="wasm32-wasip1" --release
