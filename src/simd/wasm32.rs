@@ -1,5 +1,5 @@
 use super::{Simd, UnaryFn1, UnaryFn2};
-use std::arch::wasm32::*;
+use core::arch::wasm32::*;
 
 pub(crate) struct Wasm32 {}
 impl Simd for Wasm32 {
@@ -89,10 +89,11 @@ impl Simd for Wasm32 {
     unsafe fn sub_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32 {
         i32x4_sub(a, b)
     }
-
+    // not is supposed be applied to the second argument
+    // so swap arguments for wasm simd
     #[inline(always)]
     unsafe fn andnot_i32(a: Self::Vi32, b: Self::Vi32) -> Self::Vi32 {
-        v128_andnot(a, b)
+        v128_andnot(b, a)
     }
 
     #[inline(always)]
@@ -130,9 +131,11 @@ impl Simd for Wasm32 {
         f32x4_add(ab, c)
     }
 
+    // not is supposed be applied to the second argument
+    // so swap arguments for wasm simd
     #[inline(always)]
     unsafe fn andnot_f32(a: Self::Vf32, b: Self::Vf32) -> Self::Vf32 {
-        v128_andnot(a, b)
+        v128_andnot(b, a)
     }
 
     #[inline(always)]

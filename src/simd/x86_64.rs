@@ -1,7 +1,8 @@
+use super::{Simd, UnaryFn1, UnaryFn2};
 use core::arch::asm;
 use core::arch::x86_64::*;
+
 pub(crate) struct Avx2Fma {}
-use super::{Simd, UnaryFn1, UnaryFn2};
 
 impl Simd for Avx2Fma {
     const F32_WIDTH: usize = 8;

@@ -39,38 +39,45 @@ macro_rules! impl_unary {
                 return;
             }
             let fn_sequantial = $dispatch_fn();
-            let num_per_thread_min = 100000;
-            let host_num_threads = std::thread::available_parallelism().map_or(1, |x| x.get());
-            // read MATHFUN_NUM_THREADS env variable
-            let num_thread_max = std::env::var("MATHFUN_NUM_THREADS")
-                .ok()
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(host_num_threads);
-            let n_per_thread = (n + num_thread_max - 1) / num_thread_max;
-            let num_thread = if n_per_thread >= num_per_thread_min {
-                num_thread_max
-            } else {
-                (n + num_per_thread_min - 1) / num_per_thread_min
-            };
-            // upper bound by 2
-            let num_thread = num_thread.min(2);
-            let num_per_thread = (n + num_thread - 1) / num_thread;
-            let a_usize = a as usize;
-            let y_usize = y as usize;
-            let x = std::thread::spawn(move || {
-                for i in 1..num_thread {
-                    let a = a_usize as *const $ta;
-                    let y = y_usize as *mut $tb;
-                    let n_cur = num_per_thread.min(n - i * num_per_thread);
-                    fn_sequantial(
-                        n_cur,
-                        a.offset((i * num_per_thread) as isize),
-                        y.offset((i * num_per_thread) as isize),
-                    );
-                }
-            });
-            fn_sequantial(n.min(num_per_thread), a, y);
-            x.join().unwrap();
+            // wasm32 does not have proper multithreading support, yet
+            #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+            {
+                let host_num_threads = std::thread::available_parallelism().map_or(1, |x| x.get());
+                let num_per_thread_min = 100000;
+                let num_thread_max = std::env::var("MATHFUN_NUM_THREADS")
+                    .ok()
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(host_num_threads);
+                let n_per_thread = (n + num_thread_max - 1) / num_thread_max;
+                let num_thread = if n_per_thread >= num_per_thread_min {
+                    num_thread_max
+                } else {
+                    (n + num_per_thread_min - 1) / num_per_thread_min
+                };
+                let num_thread = num_thread.min(2);
+                let num_per_thread = (n + num_thread - 1) / num_thread;
+                let a_usize = a as usize;
+                let y_usize = y as usize;
+                let x = std::thread::spawn(move || {
+                    for i in 1..num_thread {
+                        let a = a_usize as *const $ta;
+                        let y = y_usize as *mut $tb;
+                        let n_cur = num_per_thread.min(n - i * num_per_thread);
+                        fn_sequantial(
+                            n_cur,
+                            a.offset((i * num_per_thread) as isize),
+                            y.offset((i * num_per_thread) as isize),
+                        );
+                    }
+                });
+                fn_sequantial(n.min(num_per_thread), a, y);
+                x.join().unwrap();
+            }
+            #[cfg(any(not(feature = "std"), target_arch = "wasm32"))]
+            {
+                fn_sequantial(n, a, y);
+            }
+
         }
     };
 }
@@ -231,6 +238,9 @@ impl_fallback!(vs_cos, cos, f32);
 #[cfg(test)]
 mod tests {
     use super::*;
+    extern crate std;
+
+    use std::{vec, vec::Vec};
 
     struct F32Pool {
         a: Vec<f32>,
@@ -250,8 +260,8 @@ mod tests {
         pub(crate) fn set_interval(&mut self, n: usize) {
             assert!(n <= 1 << 12);
             let bit_start = n * self.a.len();
-            for i in 0..n {
-                self.a[i] = f32::from_bits(bit_start as u32 + i as u32);
+            for (i, a) in self.a.iter_mut().enumerate() {
+                *a = f32::from_bits(bit_start as u32 + i as u32);
             }
         }
 
