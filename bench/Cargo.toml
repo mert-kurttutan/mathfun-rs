@@ -1,0 +1,19 @@
+[package]
+name = "bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mathfun = { path = "../" }
+
+[dev-dependencies]
+# disable rayon to enable testing on wasm32 target
+criterion = {version="0.5", features=["plotters", "cargo_bench_support"], default-features=false}
+rand = "0.9"
+libloading = "0.8.5"
+libc = "0.2"
+
+
+[[bench]]
+name = "bench"
+harness = false
