@@ -17,6 +17,24 @@ pub(crate) use crate::simd::Wasm32;
 #[allow(unused)]
 use crate::RUNTIME_HW_CONFIG;
 
+#[derive(Clone, Copy)]
+pub(crate) struct InternalPtr<T> {
+    pub(crate) ptr: *const T,
+}
+
+// need to implement to share between threads
+unsafe impl<T> Send for InternalPtr<T> {}
+unsafe impl<T> Sync for InternalPtr<T> {}
+
+#[derive(Clone, Copy)]
+pub(crate) struct InternalPtrMut<T> {
+    pub(crate) ptr: *mut T,
+}
+
+// need to implement to share between threads
+unsafe impl<T> Send for InternalPtrMut<T> {}
+unsafe impl<T> Sync for InternalPtrMut<T> {}
+
 macro_rules! impl_unary {
     (
         $docs:tt,
@@ -34,10 +52,12 @@ macro_rules! impl_unary {
             Fallback::$name
         }
         #[doc = $docs]
-        pub unsafe fn $name(n: usize, a: *const $ta, y: *mut $tb) {
+        pub unsafe fn $name(n: usize, a: *const $ta, b: *mut $tb) {
             if n == 0 {
                 return;
             }
+            let a_ptr = InternalPtr { ptr: a };
+            let b_ptr = InternalPtrMut { ptr: b };
             let fn_sequantial = $dispatch_fn();
             // wasm32 does not have proper multithreading support, yet
             #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
@@ -56,26 +76,23 @@ macro_rules! impl_unary {
                 };
                 let num_thread = num_thread.min(2);
                 let num_per_thread = (n + num_thread - 1) / num_thread;
-                let a_usize = a as usize;
-                let y_usize = y as usize;
-                let x = std::thread::spawn(move || {
+                std::thread::scope(|s| {
                     for i in 1..num_thread {
-                        let a = a_usize as *const $ta;
-                        let y = y_usize as *mut $tb;
                         let n_cur = num_per_thread.min(n - i * num_per_thread);
-                        fn_sequantial(
-                            n_cur,
-                            a.offset((i * num_per_thread) as isize),
-                            y.offset((i * num_per_thread) as isize),
-                        );
+                        s.spawn(move || {
+                            let a_ptr = a_ptr;
+                            let b_ptr = b_ptr;
+                            let a_c = a_ptr.ptr.add(i * num_per_thread);
+                            let b_c = b_ptr.ptr.add(i * num_per_thread);
+                            fn_sequantial(n_cur, a_c, b_c);
+                        });
                     }
                 });
-                fn_sequantial(n.min(num_per_thread), a, y);
-                x.join().unwrap();
+                fn_sequantial(n.min(num_per_thread), a, b);
             }
             #[cfg(any(not(feature = "std"), target_arch = "wasm32"))]
             {
-                fn_sequantial(n, a, y);
+                fn_sequantial(n, a, b);
             }
 
         }
