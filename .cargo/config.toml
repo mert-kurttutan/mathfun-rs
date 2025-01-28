@@ -1,6 +1,5 @@
 # [build]
 # target = "wasm32-wasip1"
-# rustflags = "-C target-feature=+simd128"
 
 [target.'cfg(target_arch="wasm32")']
 runner = ["wasm-runner", "wasmtime"]

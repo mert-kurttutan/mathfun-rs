@@ -62,7 +62,7 @@ jobs:
             cargo install wasm-runner
             curl https://wasmtime.dev/install.sh -sSf | bash
             rustup target add wasm32-wasip1
-            cargo test --target="wasm32-wasip1" --release
+            RUSTFLAGS="-Ctarget-feature=+simd128" cargo test --target="wasm32-wasip1" --release
       - uses: actions/upload-artifact@v4
         if: matrix.rust == 'nightly' && always()
         with:
