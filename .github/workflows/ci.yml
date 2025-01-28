@@ -32,6 +32,30 @@ jobs:
         run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
         if: matrix.rust == 'nightly'
       - run: cargo test --release
+      - uses: actions/upload-artifact@v4
+        if: matrix.rust == 'nightly' && always()
+        with:
+          name: Cargo.lock
+          path: Cargo.lock
+        continue-on-error: true
+
+  wasm-test:
+    name: wasm-testing
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable]
+        os: [ubuntu-latest]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{matrix.rust}}
+      - name: Enable type layout randomization
+        run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
+        if: matrix.rust == 'nightly'
       - name: wasm-testing
         if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
         run: |
@@ -45,7 +69,6 @@ jobs:
           name: Cargo.lock
           path: Cargo.lock
         continue-on-error: true
-
   # Check formatting with rustfmt
   formatting:
     name: cargo fmt
