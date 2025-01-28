@@ -17,23 +17,23 @@ pub(crate) use crate::simd::Wasm32;
 #[allow(unused)]
 use crate::RUNTIME_HW_CONFIG;
 
+#[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 #[derive(Clone, Copy)]
 pub(crate) struct InternalPtr<T> {
     pub(crate) ptr: *const T,
 }
 
+#[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 // need to implement to share between threads
 unsafe impl<T> Send for InternalPtr<T> {}
-unsafe impl<T> Sync for InternalPtr<T> {}
-
+#[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 #[derive(Clone, Copy)]
 pub(crate) struct InternalPtrMut<T> {
     pub(crate) ptr: *mut T,
 }
-
+#[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 // need to implement to share between threads
 unsafe impl<T> Send for InternalPtrMut<T> {}
-unsafe impl<T> Sync for InternalPtrMut<T> {}
 
 macro_rules! impl_unary {
     (
@@ -56,12 +56,12 @@ macro_rules! impl_unary {
             if n == 0 {
                 return;
             }
-            let a_ptr = InternalPtr { ptr: a };
-            let b_ptr = InternalPtrMut { ptr: b };
             let fn_sequantial = $dispatch_fn();
             // wasm32 does not have proper multithreading support, yet
             #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
             {
+                let a_ptr = InternalPtr { ptr: a };
+                let b_ptr = InternalPtrMut { ptr: b };
                 let host_num_threads = std::thread::available_parallelism().map_or(1, |x| x.get());
                 let num_per_thread_min = 100000;
                 let num_thread_max = std::env::var("MATHFUN_NUM_THREADS")
