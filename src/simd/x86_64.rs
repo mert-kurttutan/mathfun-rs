@@ -857,8 +857,8 @@ pub(crate) unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
     const NR: usize = 16;
     // Constants
     // use asm until avx512f is stabilized
-    const EXP_HI: f32 = 88.3762626647949 * 1.0;
-    const EXP_LO: f32 = -88.3762626647949 * 1.0;
+    const EXP_HI: f32 = 88.3762626647949 * 0.5;
+    const EXP_LO: f32 = -88.3762626647949 * 0.5;
     const LOG2EF: f32 = 1.44269504088896341;
     const INV_LOG2EF: f32 = 0.693359375;
     const CEHPES_EXP_C2: f32 = -2.12194440e-4;
@@ -923,15 +923,12 @@ pub(crate) unsafe fn vs_tanh_avx512f_asm(n: usize, a: *const f32, b: *mut f32) {
         "vscalefps       %zmm10, %zmm9, %zmm9",
         "vmulps %zmm9, %zmm9, %zmm9",
 
-        "vmaxps %zmm31, %zmm13, %zmm31",
-
         "vaddps %zmm9, %zmm15, %zmm16",
         "vaddps %zmm9, %zmm8, %zmm9",
         "vdivps %zmm9, %zmm16, %zmm9",
-        "vminps %zmm8, %zmm9, %zmm9",
-        "vmaxps %zmm15, %zmm9, %zmm9",
+        "vminps %zmm9, %zmm8, %zmm9",
+        "vmaxps %zmm9, %zmm15, %zmm9",
 
-        "vminps %zmm31, %zmm9, %zmm9",
         "vmovups %zmm9, ({bx})",
         "add  $64, {ax}",
         "add  $64, {bx}",
