@@ -239,27 +239,27 @@ impl UnaryFn1 for Avx2Fma {}
 impl UnaryFn2 for Avx2Fma {}
 
 impl Avx2Fma {
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx2,avx,fma")]
     pub(crate) unsafe fn vs_exp(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_exp_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx2,avx,fma")]
     pub(crate) unsafe fn vs_ln(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_ln_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx2,avx,fma")]
     pub(crate) unsafe fn vs_tanh(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_tanh_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx2,avx,fma")]
     pub(crate) unsafe fn vs_sin(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_sin_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx2,fma")]
+    #[target_feature(enable = "avx2,avx,fma")]
     pub(crate) unsafe fn vs_cos(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_cos_0(n, a, b)
     }
@@ -628,37 +628,37 @@ impl UnaryFn1 for AvxSse2 {
 impl UnaryFn2 for AvxSse2 {}
 
 impl AvxSse2 {
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx,sse2,sse")]
     pub(crate) unsafe fn vs_exp(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_exp_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx,sse2,sse")]
     pub(crate) unsafe fn vs_ln(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_ln_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx,sse2,sse")]
     pub(crate) unsafe fn vs_tanh(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_tanh_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx,sse2,sse")]
     pub(crate) unsafe fn vs_sin(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_sin_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx,sse2,sse")]
     pub(crate) unsafe fn vs_cos(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_cos_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx")]
     pub(crate) unsafe fn vs_sqrt(n: usize, a: *const f32, b: *mut f32) {
         Self::vs_sqrt_0(n, a, b)
     }
 
-    #[target_feature(enable = "avx,sse2")]
+    #[target_feature(enable = "avx")]
     pub(crate) unsafe fn vd_sqrt(n: usize, a: *const f64, b: *mut f64) {
         Self::vd_sqrt_0(n, a, b)
     }

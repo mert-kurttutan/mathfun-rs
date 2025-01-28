@@ -66,7 +66,7 @@ fn detect_hw_config() -> CpuFeatures {
         let avx = feature_info.has_avx();
         let fma = feature_info.has_fma();
         let avx2 = extended_feature_info.has_avx2();
-        let avx512f = extended_feature_info.has_avx512f();
+        let avx512f = extended_feature_info.has_avx512f() && false;
         let f16c = feature_info.has_f16c();
         let extended_processor_info = cpuid.get_extended_processor_and_feature_identifiers().unwrap();
         let fma4 = extended_processor_info.has_fma4();
