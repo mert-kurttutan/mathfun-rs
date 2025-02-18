@@ -21,3 +21,6 @@ To enable simd on wasm32 target, you need to use tthe flag to enable the feature
 | vs_tanh     |  ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ✅  |
 | vs_sqrt    |  ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ✅  |
 | vd_sqrt    | ✅   |   ✅  |  ✅   |    ✅    |    ✅  |    ✅  |
+
+**Note:**
+The all other functions (including vd_sin, vd_cos) not listed here use scalar version since as of now
